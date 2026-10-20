@@ -9,6 +9,7 @@ They change the game configuration in the database only; the server code is unch
 | `02-import-97d-items.sql` | Adds the 0.97d items that later went to the Dark Lord as new items for their original classes. The Season 6 Dark Lord items stay as they are. |
 | `03-remove-summoner-rf-items.sql` | Summoner and Rage Fighter items no longer drop from monsters, boxes or medals, aren't crafted by the wing mixes, and aren't sold by NPCs. |
 | `04-more-monster-spots.sql` | More monsters on the leveling maps. `04-revert-more-monster-spots.sql` undoes it. |
+| `05-storm-set.sql` | Adds the 0.97d Storm set for wizards and gladiators, with stats balanced for the wizard sets. |
 
 ## New items
 
@@ -24,8 +25,22 @@ Only the MuMain client shows them: its `Data/Items` JSON files need the matching
 | Embroidered set | 7-11 / 100 | Dark Knight | Light Plate set |
 | Magus set | 7-11 / 101 | Dark Knight; Magic Gladiator without the helm | Dark Steel set |
 | Adamantine set (0.97d) | 7-11 / 102 | Dark Wizard | Dark Master set |
+| Storm set | 7-11 / 103 | Dark Wizard; Magic Gladiator without the helm | Adamantine set, with balanced stats (below) |
 
-The maces are knight maces: no scepter bonus, no pet command damage.
+The maces are knight maces: no scepter bonus, no pet command damage. The new armor sets get the
+normal set bonuses of their source set, not its ancient sets.
+
+The Storm set keeps the drop levels of the Season 6 Adamantine set (57-78), between the Legendary
+and Grand Soul sets. Its defense and requirements lie between those two sets at that drop level,
+instead of the higher Dark Lord values:
+
+| Piece | Drop level | Defense | Strength | Agility |
+|---|---|---|---|---|
+| Helm | 66 | 23 | 45 | 10 |
+| Armor | 78 | 29 | 52 | 13 |
+| Pants | 70 | 25 | 50 | 10 |
+| Gloves (attack speed 3) | 57 | 16 | 35 | 5 |
+| Boots | 60 | 17 | 44 | 5 |
 
 ## More monsters
 
@@ -51,5 +66,5 @@ Get-Content -Raw tbt-server\sql\01-classes-and-resets.sql | docker exec -i datab
 docker restart openmu-startup
 ```
 
-`02-import-97d-items.sql` stops with an error when an item number is already taken, so it runs once
-per database. The other scripts can run again.
+`02-import-97d-items.sql` and `05-storm-set.sql` stop with an error when an item number is already
+taken, so they run once per database. The other scripts can run again.

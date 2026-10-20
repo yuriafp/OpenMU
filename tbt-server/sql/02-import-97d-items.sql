@@ -89,6 +89,8 @@ begin
     join config."ItemOfItemSet" x on x."ItemSetGroupId" = s."Id"
     join config."ItemDefinition" i on i."Id" = x."ItemDefinitionId"
     where i."Group" between 7 and 11 and i."Number" = p_src
+      -- normal set bonuses only, no ancient sets
+      and not exists (select 1 from config."ItemOfItemSet" a where a."ItemSetGroupId" = s."Id" and a."AncientSetDiscriminator" <> 0)
   loop
     new_group := gen_random_uuid();
     insert into config."ItemSetGroup" ("Id", "GameConfigurationId", "Name", "AlwaysApplies", "CountDistinct", "MinimumItemCount", "SetLevel", "OptionsId")
