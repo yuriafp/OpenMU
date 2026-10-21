@@ -1315,6 +1315,18 @@
   <data name="BotConfiguration_PotionStockCharges_Description" xml:space="preserve">
     <value>机器人在商店补充治疗和魔力药水时，分别补足的可使用次数。</value>
   </data>
+  <data name="BotConfiguration_MaximumWingTier_Name" xml:space="preserve">
+    <value>最高翅膀代数</value>
+  </data>
+  <data name="BotConfiguration_MaximumWingTier_Description" xml:space="preserve">
+    <value>机器人在等级里程碑时可获得的最高翅膀代数（1 到 3）；0 表示不发放翅膀。</value>
+  </data>
+  <data name="BotConfiguration_SecondTierWingLevel_Name" xml:space="preserve">
+    <value>二代翅膀的物品等级</value>
+  </data>
+  <data name="BotConfiguration_SecondTierWingLevel_Description" xml:space="preserve">
+    <value>发给机器人的二代翅膀的物品等级。低于 +9 时，第二个里程碑不会重新发放披风。</value>
+  </data>
   <data name="BotConfiguration_ProofOfConceptAccounts_Name" xml:space="preserve">
     <value>额外托管账号</value>
   </data>

@@ -123,6 +123,24 @@ public class BotConfiguration
     public int PotionStockCharges { get; set; } = 60;
 
     /// <summary>
+    /// Gets or sets the best wing tier (1 to 3) bots are granted at their level milestones (see
+    /// <c>BotWingHandler</c>); 0 grants no wings at all. Lower it to keep the bots from wearing
+    /// the wings the human players have to craft, e.g. 2 for no third tier wings.
+    /// </summary>
+    [Display(Name = nameof(MUnique.OpenMU.GameLogic.Properties.PlugInResources.BotConfiguration_MaximumWingTier_Name), Description = nameof(MUnique.OpenMU.GameLogic.Properties.PlugInResources.BotConfiguration_MaximumWingTier_Description), ResourceType = typeof(MUnique.OpenMU.GameLogic.Properties.PlugInResources))]
+    [Range(0, 3)]
+    public int MaximumWingTier { get; set; } = 3;
+
+    /// <summary>
+    /// Gets or sets the item level of the second tier wings granted to bots. Below +9, the Dark Lord
+    /// and Rage Fighter capes are not re-granted at the second milestone, because such a cape would
+    /// not count as an upgrade of the first one.
+    /// </summary>
+    [Display(Name = nameof(MUnique.OpenMU.GameLogic.Properties.PlugInResources.BotConfiguration_SecondTierWingLevel_Name), Description = nameof(MUnique.OpenMU.GameLogic.Properties.PlugInResources.BotConfiguration_SecondTierWingLevel_Description), ResourceType = typeof(MUnique.OpenMU.GameLogic.Properties.PlugInResources))]
+    [Range(0, 15)]
+    public byte SecondTierWingLevel { get; set; } = 9;
+
+    /// <summary>
     /// Gets or sets a comma separated list of login names of existing accounts to animate as bots.
     /// This is an optional extra hook alongside the generated population (see
     /// <see cref="NumberOfAccounts"/>): every listed account gets a bot driving its first character.
@@ -163,6 +181,21 @@ public class BotConfiguration
     /// <remarks>Deliberately a method, like <see cref="GetEffectiveCharactersPerAccount"/>.</remarks>
     public int GetEffectivePotionStockCharges()
         => Math.Clamp(this.PotionStockCharges, 10, 255);
+
+    /// <summary>
+    /// Gets the effective, clamped best wing tier bots are granted.
+    /// </summary>
+    /// <returns>A value between 0 and 3.</returns>
+    /// <remarks>Deliberately a method, like <see cref="GetEffectiveCharactersPerAccount"/>.</remarks>
+    public int GetEffectiveMaximumWingTier()
+        => Math.Clamp(this.MaximumWingTier, 0, 3);
+
+    /// <summary>
+    /// Gets the effective, clamped item level of the second tier wings granted to bots.
+    /// </summary>
+    /// <returns>A value between 0 and 15.</returns>
+    public byte GetEffectiveSecondTierWingLevel()
+        => Math.Min(this.SecondTierWingLevel, (byte)15);
 
     /// <summary>
     /// Parses <see cref="ProofOfConceptAccounts"/> into the distinct, trimmed login names.

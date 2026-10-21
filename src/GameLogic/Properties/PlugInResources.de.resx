@@ -1377,6 +1377,18 @@
   <data name="BotConfiguration_PotionStockCharges_Description" xml:space="preserve">
     <value>Bis zu wie vielen Ladungen an Heil- und Manatränken ein Bot bei einem Händler einkauft.</value>
   </data>
+  <data name="BotConfiguration_MaximumWingTier_Name" xml:space="preserve">
+    <value>Höchste Flügelstufe</value>
+  </data>
+  <data name="BotConfiguration_MaximumWingTier_Description" xml:space="preserve">
+    <value>Die beste Flügelstufe (1 bis 3), die Bots an ihren Levelmeilensteinen erhalten; 0 vergibt keine Flügel.</value>
+  </data>
+  <data name="BotConfiguration_SecondTierWingLevel_Name" xml:space="preserve">
+    <value>Item-Level der Flügel der 2. Stufe</value>
+  </data>
+  <data name="BotConfiguration_SecondTierWingLevel_Description" xml:space="preserve">
+    <value>Das Item-Level der Flügel der 2. Stufe, die Bots erhalten. Unter +9 werden die Umhänge am zweiten Meilenstein nicht erneut vergeben.</value>
+  </data>
   <data name="BotConfiguration_ProofOfConceptAccounts_Name" xml:space="preserve">
     <value>Zusätzliche zu belebende Konten</value>
   </data>
