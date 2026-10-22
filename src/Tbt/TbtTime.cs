@@ -23,4 +23,11 @@ internal static class TbtTime
     /// <param name="utc">The time, in UTC.</param>
     /// <returns>The shown time.</returns>
     public static string Format(TimeOnly utc) => utc.Add(ShownOffset).ToString("HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Formats a day and time of UTC as shown to the players, e.g. "01/11 às 19:30".
+    /// </summary>
+    /// <param name="utc">The day and time, in UTC.</param>
+    /// <returns>The shown day and time.</returns>
+    public static string Format(DateTime utc) => (utc + ShownOffset).ToString("dd/MM 'às' HH:mm", CultureInfo.InvariantCulture);
 }

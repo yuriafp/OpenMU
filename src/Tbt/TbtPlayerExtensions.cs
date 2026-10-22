@@ -40,6 +40,14 @@ internal static class TbtPlayerExtensions
         => player.Account is { IsBot: false, IsTemplate: false } && player.SelectedCharacter is not null;
 
     /// <summary>
+    /// Determines whether the player is in the world.
+    /// </summary>
+    /// <param name="player">The player.</param>
+    /// <returns><c>true</c>, if the player is in the world.</returns>
+    public static bool IsInWorld(this Player player)
+        => InWorldStates.Contains(player.PlayerState.CurrentState);
+
+    /// <summary>
     /// Determines whether the state change is the entry of a character into the world.
     /// </summary>
     /// <param name="previousState">The previous state.</param>

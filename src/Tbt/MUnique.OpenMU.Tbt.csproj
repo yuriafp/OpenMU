@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The plugins of our TBT server (PLANO-SERVIDOR.md, 9.5): the registro, the welcome, the drop
-       announcement, the milestones, the bots' reset limit and the Oficina. Loaded by the Startup. -->
+       announcement, the milestones, the bots' reset limit, the Oficina and the starter kit. Loaded by the Startup. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -22,7 +22,10 @@
   <ItemGroup>
     <ProjectReference Include="..\DataModel\MUnique.OpenMU.DataModel.csproj" />
     <ProjectReference Include="..\GameLogic\MUnique.OpenMU.GameLogic.csproj" />
+    <!-- For the handler of the sale to a merchant, which replaces the one of OpenMU (StarterKit). -->
+    <ProjectReference Include="..\GameServer\MUnique.OpenMU.GameServer.csproj" />
     <ProjectReference Include="..\Interfaces\MUnique.OpenMU.Interfaces.csproj" />
+    <ProjectReference Include="..\Network\Packets\MUnique.OpenMU.Network.Packets.csproj" />
     <ProjectReference Include="..\Persistence\EntityFramework\MUnique.OpenMU.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\PlugIns\MUnique.OpenMU.PlugIns.csproj" />
   </ItemGroup>

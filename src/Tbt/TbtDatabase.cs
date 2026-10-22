@@ -77,6 +77,19 @@ internal static class TbtDatabase
             plus13 integer not null,
             plus14_15 integer not null);
         create index if not exists weekly_snapshot_week_idx on tbt.weekly_snapshot (week);
+
+        create table if not exists tbt.starter_kit (
+            character_id uuid primary key,
+            account_id uuid not null,
+            character text not null,
+            given_at timestamptz not null,
+            expires_at timestamptz not null,
+            removed_at timestamptz);
+
+        create table if not exists tbt.starter_kit_item (
+            item_id uuid primary key,
+            character_id uuid not null references tbt.starter_kit (character_id) on delete cascade);
+        create index if not exists starter_kit_item_character_idx on tbt.starter_kit_item (character_id);
         """;
 
     /// <summary>
