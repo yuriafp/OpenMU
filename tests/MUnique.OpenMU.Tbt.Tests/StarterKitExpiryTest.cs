@@ -190,6 +190,37 @@ public class StarterKitExpiryTest
     }
 
     /// <summary>
+    /// The periodic check sends the expiry of the kit items in the inventory again, at their slots,
+    /// since the client forgets it whenever it gets the whole inventory, e.g. after a trade.
+    /// </summary>
+    [Test]
+    public async Task CheckSendsTheExpiryAgainAsync()
+    {
+        var inventory = CreateInventory();
+        var helm = Item(this._helmDefinition, InventoryConstants.HelmSlot);
+        var staff = Item(this._staffDefinition, FirstBagSlot);
+        var jewel = Item(this._jewelDefinition, 30);
+        foreach (var item in new[] { helm, staff, jewel })
+        {
+            Assert.That(await inventory.AddItemAsync(item.ItemSlot, item).ConfigureAwait(false), Is.True);
+        }
+
+        var kit = new ActiveStarterKit(Guid.NewGuid(), ExpiresAt, [helm.Id, staff.Id]);
+        var (player, output) = CreateRemotePlayer();
+
+        await StarterKitPlugIn.CheckAsync(player, kit, inventory, ExpiresAt.AddDays(-5)).ConfigureAwait(false);
+        await StarterKitPlugIn.CheckAsync(player, kit, inventory, ExpiresAt.AddDays(-5)).ConfigureAwait(false);
+
+        byte[] list =
+        [
+            0xC1, 0x05, 0xD2, 0x11, 2,
+            0xC1, 0x0C, 0xD2, 0x12, 0x02, 0x0E, 2, 0, .. ExpiryBytes,
+            0xC1, 0x0C, 0xD2, 0x12, 0x01, 0x0A, 12, 0, .. ExpiryBytes,
+        ];
+        Assert.That(output.ToArray(), Is.EqualTo(list.Concat(list)));
+    }
+
+    /// <summary>
     /// The item code is the group times 512 plus the number, and the expiry is the same Unix time
     /// whether the time says it's UTC or not.
     /// </summary>

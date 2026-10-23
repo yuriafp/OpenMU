@@ -34,8 +34,10 @@ using MUnique.OpenMU.Tbt.Registro;
 /// world, else on its next entry. Until then, its items keep their full durability: the Panda would be
 /// destroyed at 0, and the client shows no durability on items with an expiry.</item>
 /// <item>The game client gets the expiry of the kit items (<see cref="PeriodItemRef"/>) and shows it
-/// on them, like on the timed items of the cash shop: at the entry, when the kit is given, and when an
-/// item of it changes its slot, since the client marks the slot. The entry and <c>/kit</c> show it, too.</item>
+/// on them, like on the timed items of the cash shop: at the entry, when the kit is given, when an item
+/// of it changes its slot, since the client marks the slot, and again at every check, since the client
+/// forgets it whenever it gets the whole inventory again, e.g. after a trade. The entry and <c>/kit</c>
+/// show it, too.</item>
 /// </list>
 /// </remarks>
 [PlugIn]
@@ -48,6 +50,7 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     /// <summary>
     /// The check of the expiry and of the durability of the kit items. The Panda loses durability with
     /// the damage the character takes, and the pet is destroyed at 0, so the durability is refilled often.
+    /// It's also how long the client may show a kit item without its expiry.
     /// </summary>
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
@@ -342,7 +345,8 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     }
 
     /// <summary>
-    /// The periodic check of a kit: removes it when it's expired, else keeps its items at their full durability.
+    /// The periodic check of a kit: removes it when it's expired, else keeps its items at their full
+    /// durability and sends their expiry to the client again.
     /// </summary>
     /// <param name="player">The player.</param>
     /// <param name="kit">The kit of the player.</param>
@@ -360,6 +364,11 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
             }
 
             await RefillDurabilityAsync(player, kit, inventory).ConfigureAwait(false);
+
+            // The client forgets the expiry whenever it gets the whole inventory again, e.g. after a
+            // trade (OpenMU's TradeFinishedPlugIn). The packets are small, and the client only marks
+            // the items again.
+            await SendExpiryOfInventoryAsync(player, kit, inventory).ConfigureAwait(false);
             if (!kit.LastHourWarned && kit.ExpiresAt - now <= LastHour)
             {
                 kit.LastHourWarned = true;
@@ -409,8 +418,7 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
         await player.ShowMessageAsync(FormatRemaining(kit, now)).ConfigureAwait(false);
 
         // The inventory went to the client with the selection of the character, before this entry.
-        // Under the lock of the packet handlers, which change the inventory, for the retry of a failed entry.
-        await player.RunPersistenceExclusiveAsync(() => SendExpiryAsync(player, kit, player.Inventory?.Items ?? [])).ConfigureAwait(false);
+        await SendExpiryOfInventoryAsync(player, kit, player.Inventory).ConfigureAwait(false);
         return true;
     }
 
@@ -668,6 +676,14 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
                 }
             }
         });
+
+    /// <summary>
+    /// Sends the expiry of the kit items in the inventory to the game client. Under the lock of the
+    /// packet handlers, which change the inventory, since the entry may be retried and the check runs
+    /// on its own.
+    /// </summary>
+    private static ValueTask SendExpiryOfInventoryAsync(Player player, ActiveStarterKit kit, IStorage? inventory)
+        => player.RunPersistenceExclusiveAsync(() => SendExpiryAsync(player, kit, inventory?.Items ?? []));
 
     /// <summary>
     /// Shows a message from a synchronous plugin point.
