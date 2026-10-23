@@ -4399,6 +4399,18 @@ namespace MUnique.OpenMU.GameLogic.Properties {
         /// <summary>Gets the localized BotConfiguration_PotionStockCharges_Description text.</summary>
         public static string BotConfiguration_PotionStockCharges_Description => ResourceManager.GetString("BotConfiguration_PotionStockCharges_Description", resourceCulture)!;
 
+        /// <summary>Gets the localized BotConfiguration_MaximumWingTier_Name text.</summary>
+        public static string BotConfiguration_MaximumWingTier_Name => ResourceManager.GetString("BotConfiguration_MaximumWingTier_Name", resourceCulture)!;
+
+        /// <summary>Gets the localized BotConfiguration_MaximumWingTier_Description text.</summary>
+        public static string BotConfiguration_MaximumWingTier_Description => ResourceManager.GetString("BotConfiguration_MaximumWingTier_Description", resourceCulture)!;
+
+        /// <summary>Gets the localized BotConfiguration_SecondTierWingLevel_Name text.</summary>
+        public static string BotConfiguration_SecondTierWingLevel_Name => ResourceManager.GetString("BotConfiguration_SecondTierWingLevel_Name", resourceCulture)!;
+
+        /// <summary>Gets the localized BotConfiguration_SecondTierWingLevel_Description text.</summary>
+        public static string BotConfiguration_SecondTierWingLevel_Description => ResourceManager.GetString("BotConfiguration_SecondTierWingLevel_Description", resourceCulture)!;
+
         /// <summary>Gets the localized BotConfiguration_ProofOfConceptAccounts_Name text.</summary>
         public static string BotConfiguration_ProofOfConceptAccounts_Name => ResourceManager.GetString("BotConfiguration_ProofOfConceptAccounts_Name", resourceCulture)!;
 

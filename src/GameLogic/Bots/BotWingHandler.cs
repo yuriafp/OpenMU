@@ -21,6 +21,8 @@ using MUnique.OpenMU.GameLogic.Offline;
 /// <see cref="ItemDefinition.QualifiedCharacters"/>, so e.g. the third-tier wings (master classes
 /// only) are simply not offered to a bot which did not evolve yet, and the Dark Lord/Rage Fighter
 /// capes - their only pre-master wing - are re-granted as a fresh +9 cape at the second milestone.
+/// The <see cref="BotConfiguration"/> can cap the granted tier (<see cref="BotConfiguration.MaximumWingTier"/>)
+/// and lower the level of the second pair (<see cref="BotConfiguration.SecondTierWingLevel"/>).
 /// </summary>
 internal static class BotWingHandler
 {
@@ -115,14 +117,18 @@ internal static class BotWingHandler
             return null;
         }
 
+        var configuration = player.GameContext.FeaturePlugIns.GetPlugIn<BotFeaturePlugIn>()?.Configuration;
+        var secondTierItemLevel = configuration?.GetEffectiveSecondTierWingLevel() ?? SecondTierItemLevel;
         var level = (int)attributes[Stats.Level];
-        var earnedTier = level switch
-        {
-            >= ThirdTierLevel => 3,
-            >= SecondTierLevel => 2,
-            >= FirstTierLevel => 1,
-            _ => 0,
-        };
+        var earnedTier = Math.Min(
+            configuration?.GetEffectiveMaximumWingTier() ?? 3,
+            level switch
+            {
+                >= ThirdTierLevel => 3,
+                >= SecondTierLevel => 2,
+                >= FirstTierLevel => 1,
+                _ => 0,
+            });
 
         // Walk down from the earned tier to the best one the class currently qualifies for: a bot
         // which did not evolve into its master class yet simply isn't qualified for the third tier
@@ -130,7 +136,7 @@ internal static class BotWingHandler
         for (var tier = earnedTier; tier >= 1; tier--)
         {
             var candidates = player.GameContext.Configuration.Items
-                .Where(d => TierIds(tier).Contains((d.Group, d.Number))
+                .Where(d => TierIds(tier, secondTierItemLevel).Contains((d.Group, d.Number))
                             && d.ItemSlot?.ItemSlots.Contains(InventoryConstants.WingsSlot) == true
                             && d.QualifiedCharacters.Contains(characterClass))
                 .ToList();
@@ -151,7 +157,7 @@ internal static class BotWingHandler
             var (itemLevel, optionLevel) = tier switch
             {
                 3 => ((byte)15, 4),
-                2 => (SecondTierItemLevel, 4),
+                2 => (secondTierItemLevel, 4),
                 _ => ((byte)0, 3),
             };
 
@@ -161,11 +167,17 @@ internal static class BotWingHandler
         return null;
     }
 
-    private static IReadOnlyCollection<(byte Group, short Number)> TierIds(int tier)
+    /// <summary>
+    /// The wing numbers of a tier. A cape granted below +9 would still count as the first tier
+    /// (see <see cref="TierOf"/>) and be re-granted again and again, so the second tier only
+    /// offers the capes at +9 or more.
+    /// </summary>
+    private static IReadOnlyCollection<(byte Group, short Number)> TierIds(int tier, byte secondTierItemLevel)
     {
         return tier switch
         {
             3 => ThirdTierIds,
+            2 when secondTierItemLevel < SecondTierItemLevel => SecondTierIds,
             2 => SecondTierIds.Concat(CapeIds).ToList(),
             _ => FirstTierIds.Concat(CapeIds).ToList(),
         };

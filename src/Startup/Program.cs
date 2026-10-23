@@ -70,6 +70,9 @@ internal sealed class Program : IDisposable
     public Program()
     {
         AppDomain.CurrentDomain.UnhandledException += this.OnUnhandledException;
+
+        // TBT: nothing else uses the assembly of our plugins, so it's loaded here for the plugin discovery.
+        _ = typeof(MUnique.OpenMU.Tbt.Registro.ActivityLog).Assembly;
         SelfLog.Enable(Console.Error);
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())

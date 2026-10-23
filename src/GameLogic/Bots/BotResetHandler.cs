@@ -4,6 +4,7 @@
 
 namespace MUnique.OpenMU.GameLogic.Bots;
 
+using System.ComponentModel;
 using MUnique.OpenMU.GameLogic.Attributes;
 using MUnique.OpenMU.GameLogic.Offline;
 using MUnique.OpenMU.GameLogic.PlugIns;
@@ -60,7 +61,8 @@ internal static class BotResetHandler
 
     /// <summary>
     /// Determines whether the bot is currently eligible for a reset: the reset feature is enabled,
-    /// the required level is reached and the reset limit (if any) is not yet exhausted.
+    /// the required level is reached, the reset limit (if any) is not yet exhausted and no
+    /// <see cref="IBotResetCheckPlugIn"/> denies it.
     /// </summary>
     /// <param name="player">The bot player.</param>
     /// <param name="configuration">The reset configuration.</param>
@@ -78,7 +80,19 @@ internal static class BotResetHandler
         }
 
         var nextResetCount = (int)attributes[Stats.Resets] + 1;
-        return configuration.ResetLimit is not > 0 || nextResetCount <= configuration.ResetLimit;
+        if (configuration.ResetLimit is > 0 && nextResetCount > configuration.ResetLimit)
+        {
+            return false;
+        }
+
+        if (player.GameContext.PlugInManager.GetPlugInPoint<IBotResetCheckPlugIn>() is { } plugInPoint)
+        {
+            var eventArgs = new CancelEventArgs();
+            plugInPoint.CheckBotReset(player, nextResetCount, eventArgs);
+            return !eventArgs.Cancel;
+        }
+
+        return true;
     }
 
     /// <summary>
