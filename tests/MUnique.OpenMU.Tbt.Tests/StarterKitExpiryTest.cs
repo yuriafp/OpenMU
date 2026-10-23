@@ -25,7 +25,8 @@ using BasicModel = MUnique.OpenMU.Persistence.BasicModel;
 /// <summary>
 /// Tests the expiry of the starter kit which the game client gets: the classic period item list,
 /// C1 05 D2 11 with the count, then C1 0C D2 12 per item, with the item code, the slot and the
-/// expiry as Unix time, all little endian.
+/// expiry as Unix time, all little endian. Also the durability of its items, which the client
+/// doesn't show on items with an expiry.
 /// </summary>
 [TestFixture]
 public class StarterKitExpiryTest
@@ -162,6 +163,33 @@ public class StarterKitExpiryTest
     }
 
     /// <summary>
+    /// The periodic check refills the durability of the kit items, equipped or in the bag, and
+    /// leaves the other items as they are.
+    /// </summary>
+    [Test]
+    public async Task CheckRefillsTheDurabilityOfTheKitItemsAsync()
+    {
+        var inventory = CreateInventory();
+        var helm = Item(Wearable(7, 2, InventoryConstants.HelmSlot), InventoryConstants.HelmSlot);
+        var staff = Item(Wearable(5, 1, InventoryConstants.LeftHandSlot), FirstBagSlot);
+        var otherHelm = Item(Wearable(7, 3, InventoryConstants.HelmSlot), 30);
+        foreach (var item in new[] { helm, staff, otherHelm })
+        {
+            item.Durability = 1;
+            Assert.That(await inventory.AddItemAsync(item.ItemSlot, item).ConfigureAwait(false), Is.True);
+        }
+
+        var kit = new ActiveStarterKit(Guid.NewGuid(), ExpiresAt, [helm.Id, staff.Id]);
+        var (player, _) = CreateRemotePlayer();
+
+        await StarterKitPlugIn.CheckAsync(player, kit, inventory, ExpiresAt.AddDays(-5)).ConfigureAwait(false);
+
+        Assert.That(helm.Durability, Is.EqualTo(helm.GetMaximumDurabilityOfOnePiece()).And.GreaterThan(1));
+        Assert.That(staff.Durability, Is.EqualTo(staff.GetMaximumDurabilityOfOnePiece()).And.GreaterThan(1));
+        Assert.That(otherHelm.Durability, Is.EqualTo(1));
+    }
+
+    /// <summary>
     /// The item code is the group times 512 plus the number, and the expiry is the same Unix time
     /// whether the time says it's UTC or not.
     /// </summary>
@@ -214,4 +242,11 @@ public class StarterKitExpiryTest
 
     private static BasicModel.Item Item(BasicModel.ItemDefinition definition, byte slot)
         => new() { Id = Guid.NewGuid(), Definition = definition, ItemSlot = slot };
+
+    private static BasicModel.ItemDefinition Wearable(byte group, short number, int equipmentSlot)
+    {
+        var slotType = new BasicModel.ItemSlotType();
+        slotType.ItemSlots.Add(equipmentSlot);
+        return new() { Group = group, Number = number, Width = 1, Height = 1, Durability = 30, ItemSlot = slotType };
+    }
 }

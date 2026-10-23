@@ -31,7 +31,8 @@ using MUnique.OpenMU.Tbt.Registro;
 /// the Chaos Machine or the Oficina, and it can't be dropped. Sold to a merchant it's worth 0 zen
 /// (<see cref="StarterKitSellHandlerPlugIn"/>), and the jewels which change an item refuse it, so none is wasted.</item>
 /// <item>When the time is up, the kit leaves the inventory: right away while the character is in the
-/// world, else on its next entry. Until then, the Panda of the kit keeps its full durability.</item>
+/// world, else on its next entry. Until then, its items keep their full durability: the Panda would be
+/// destroyed at 0, and the client shows no durability on items with an expiry.</item>
 /// <item>The game client gets the expiry of the kit items (<see cref="PeriodItemRef"/>) and shows it
 /// on them, like on the timed items of the cash shop: at the entry, when the kit is given, and when an
 /// item of it changes its slot, since the client marks the slot. The entry and <c>/kit</c> show it, too.</item>
@@ -45,8 +46,8 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     private const string BoundMessage = "Os itens do kit iniciante não saem do inventário. Vendidos ao NPC, valem 0 zen.";
 
     /// <summary>
-    /// The check of the expiry and of the Panda. The Panda loses durability with the damage the
-    /// character takes, and the pet is destroyed at 0, so its durability is refilled often.
+    /// The check of the expiry and of the durability of the kit items. The Panda loses durability with
+    /// the damage the character takes, and the pet is destroyed at 0, so the durability is refilled often.
     /// </summary>
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
@@ -164,7 +165,7 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
                     && player.PlayerState.CurrentState != PlayerState.ChangingMap
                     && player.BackupInventory is null)
                 {
-                    await CheckAsync(player, kit, now).ConfigureAwait(false);
+                    await CheckAsync(player, kit, player.Inventory, now).ConfigureAwait(false);
                 }
             }
 
@@ -337,6 +338,37 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
         if (ReferenceEquals(inventory?.GetItem(item.ItemSlot), item))
         {
             await SendExpiryAsync(player, kit, [item]).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The periodic check of a kit: removes it when it's expired, else keeps its items at their full durability.
+    /// </summary>
+    /// <param name="player">The player.</param>
+    /// <param name="kit">The kit of the player.</param>
+    /// <param name="inventory">The inventory of the player.</param>
+    /// <param name="now">The current time, in UTC.</param>
+    /// <returns>The task.</returns>
+    internal static async ValueTask CheckAsync(Player player, ActiveStarterKit kit, IStorage? inventory, DateTime now)
+    {
+        try
+        {
+            if (kit.IsExpired(now))
+            {
+                await ExpireAsync(player, kit).ConfigureAwait(false);
+                return;
+            }
+
+            await RefillDurabilityAsync(player, kit, inventory).ConfigureAwait(false);
+            if (!kit.LastHourWarned && kit.ExpiresAt - now <= LastHour)
+            {
+                kit.LastHourWarned = true;
+                await player.ShowMessageAsync(FormatRemaining(kit, now)).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            player.Logger.LogWarning(ex, "Couldn't check the starter kit of {Character}.", player.Name);
         }
     }
 
@@ -518,29 +550,6 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
         }
     }
 
-    private static async ValueTask CheckAsync(Player player, ActiveStarterKit kit, DateTime now)
-    {
-        try
-        {
-            if (kit.IsExpired(now))
-            {
-                await ExpireAsync(player, kit).ConfigureAwait(false);
-                return;
-            }
-
-            await RefillPetAsync(player, kit).ConfigureAwait(false);
-            if (!kit.LastHourWarned && kit.ExpiresAt - now <= LastHour)
-            {
-                kit.LastHourWarned = true;
-                await player.ShowMessageAsync(FormatRemaining(kit, now)).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            player.Logger.LogWarning(ex, "Couldn't check the starter kit of {Character}.", player.Name);
-        }
-    }
-
     /// <summary>
     /// Removes the expired kit from the inventory. It's recorded as removed only after the save,
     /// otherwise a crash would bring the items back without the record.
@@ -632,26 +641,33 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
         return removed >= 0;
     }
 
-    private static async ValueTask RefillPetAsync(Player player, ActiveStarterKit kit)
-    {
-        if (player.Inventory?.GetItem(InventoryConstants.PetSlot) is not { } pet
-            || !kit.ItemIds.Contains(pet.GetId())
-            || pet.Durability >= pet.GetMaximumDurabilityOfOnePiece())
+    /// <summary>
+    /// Refills the durability of the kit items in the inventory, equipped or not, which lost some.
+    /// </summary>
+    /// <remarks>
+    /// Under the lock of the packet handlers, which change the inventory. Like the loss of durability
+    /// (<see cref="Player.DecreaseItemDurabilityAsync"/>), an equipped item whose durability factor
+    /// changes, e.g. a broken one, updates the attributes, so it gives its full power again.
+    /// </remarks>
+    private static ValueTask RefillDurabilityAsync(Player player, ActiveStarterKit kit, IStorage? inventory)
+        => player.RunPersistenceExclusiveAsync(async () =>
         {
-            return;
-        }
-
-        await player.RunPersistenceExclusiveAsync(async () =>
-        {
-            if (!ReferenceEquals(player.Inventory?.GetItem(InventoryConstants.PetSlot), pet))
+            var wornItems = inventory?.Items
+                .Where(item => kit.ItemIds.Contains(item.GetId()) && item.Durability < item.GetMaximumDurabilityOfOnePiece())
+                .ToList() ?? [];
+            foreach (var item in wornItems)
             {
-                return;
+                var previousFactor = item.GetCurrentDurabilityFactor();
+                item.Durability = item.GetMaximumDurabilityOfOnePiece();
+                await player.InvokeViewPlugInAsync<IItemDurabilityChangedPlugIn>(p => p.ItemDurabilityChangedAsync(item, false)).ConfigureAwait(false);
+                if (item.ItemSlot <= InventoryConstants.LastEquippableItemSlotIndex
+                    && previousFactor != item.GetCurrentDurabilityFactor()
+                    && inventory is InventoryStorage inventoryStorage)
+                {
+                    await inventoryStorage.RaiseEquippedItemsChangedAsync(item, true, true).ConfigureAwait(false);
+                }
             }
-
-            pet.Durability = pet.GetMaximumDurabilityOfOnePiece();
-            await player.InvokeViewPlugInAsync<IItemDurabilityChangedPlugIn>(p => p.ItemDurabilityChangedAsync(pet, false)).ConfigureAwait(false);
-        }).ConfigureAwait(false);
-    }
+        });
 
     /// <summary>
     /// Shows a message from a synchronous plugin point.
