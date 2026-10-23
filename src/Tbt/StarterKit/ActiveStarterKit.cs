@@ -5,6 +5,8 @@
 namespace MUnique.OpenMU.Tbt.StarterKit;
 
 using System.Threading;
+using MUnique.OpenMU.Persistence;
+using MUnique.OpenMU.Tbt.PeriodItems;
 
 /// <summary>
 /// The starter kit of a character which is still in its inventory, as cached by the <see cref="StarterKitStore"/>.
@@ -52,6 +54,25 @@ internal sealed class ActiveStarterKit
     /// <param name="utcNow">The current time, in UTC.</param>
     /// <returns><c>true</c>, if the kit is expired.</returns>
     public bool IsExpired(DateTime utcNow) => utcNow >= this.ExpiresAt;
+
+    /// <summary>
+    /// Gets the items of this kit among the items, at their slots, with the expiry of the kit, for the game client.
+    /// </summary>
+    /// <param name="items">The items, e.g. the inventory.</param>
+    /// <returns>The period items.</returns>
+    public IReadOnlyList<PeriodItem> GetPeriodItems(IEnumerable<Item> items)
+    {
+        var periodItems = new List<PeriodItem>();
+        foreach (var item in items)
+        {
+            if (item.Definition is { } definition && this.ItemIds.Contains(item.GetId()))
+            {
+                periodItems.Add(PeriodItem.Of(definition, item.ItemSlot, this.ExpiresAt));
+            }
+        }
+
+        return periodItems;
+    }
 
     /// <summary>
     /// Starts the removal of the expired kit, once: the periodic check and the entry may both find it.

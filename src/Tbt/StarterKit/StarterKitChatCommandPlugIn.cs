@@ -12,7 +12,7 @@ using MUnique.OpenMU.PlugIns;
 
 /// <summary>
 /// The command <c>/kit</c>, which shows when the starter kit of the character expires. The client
-/// doesn't show it on the items yet (Fase 3).
+/// shows it on the items, too (see <see cref="StarterKitPlugIn"/>).
 /// </summary>
 [PlugIn]
 [Display(Name = "TBT: Comando /kit", Description = "Shows the player when the starter kit of the character expires.")]

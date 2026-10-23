@@ -18,6 +18,7 @@ using MUnique.OpenMU.Pathfinding;
 using MUnique.OpenMU.Persistence;
 using MUnique.OpenMU.PlugIns;
 using MUnique.OpenMU.Tbt.Milestones;
+using MUnique.OpenMU.Tbt.PeriodItems;
 using MUnique.OpenMU.Tbt.Registro;
 
 /// <summary>
@@ -31,13 +32,15 @@ using MUnique.OpenMU.Tbt.Registro;
 /// (<see cref="StarterKitSellHandlerPlugIn"/>), and the jewels which change an item refuse it, so none is wasted.</item>
 /// <item>When the time is up, the kit leaves the inventory: right away while the character is in the
 /// world, else on its next entry. Until then, the Panda of the kit keeps its full durability.</item>
-/// <item>The client doesn't show the expiry on the item yet (Fase 3), so the entry and <c>/kit</c> show it.</item>
+/// <item>The game client gets the expiry of the kit items (<see cref="PeriodItemRef"/>) and shows it
+/// on them, like on the timed items of the cash shop: at the entry, when the kit is given, and when an
+/// item of it changes its slot, since the client marks the slot. The entry and <c>/kit</c> show it, too.</item>
 /// </list>
 /// </remarks>
 [PlugIn]
 [Display(Name = "TBT: Kit iniciante", Description = "Gives new human characters extra level-up points and, on their first entry, a temporary starter kit of their class with the Pet Panda.")]
 [Guid("28E3DCFC-6E2A-4F6B-AFEF-21311F478234")]
-public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn, IItemMovingPlugIn, IItemDropPlugIn, IItemConsumingPlugIn, ICharacterDeletedPlugIn, ISupportCustomConfiguration<StarterKitConfiguration>, ISupportDefaultCustomConfiguration
+public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn, IItemMovingPlugIn, GameLogic.PlugIns.IItemMovedPlugIn, IItemDropPlugIn, IItemConsumingPlugIn, ICharacterDeletedPlugIn, ISupportCustomConfiguration<StarterKitConfiguration>, ISupportDefaultCustomConfiguration
 {
     private const string BoundMessage = "Os itens do kit iniciante não saem do inventário. Vendidos ao NPC, valem 0 zen.";
 
@@ -204,6 +207,25 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     }
 
     /// <inheritdoc />
+    public async ValueTask ItemMovedAsync(Player player, Item item)
+    {
+        try
+        {
+            if (StarterKitStore.IsKitItem(item)
+                && player.IsHuman()
+                && player.SelectedCharacter is { } character
+                && StarterKitStore.GetActive(character.Id) is { } kit)
+            {
+                await SendExpiryOfMoveAsync(player, kit, item, player.Inventory).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            player.Logger.LogWarning(ex, "Couldn't send the expiry of the moved {Item} of {Character}.", item, player.Name);
+        }
+    }
+
+    /// <inheritdoc />
     public async ValueTask HandleItemDropAsync(Player player, Item item, Point target, IItemDropPlugIn.ItemDropArguments dropArgs)
     {
         try
@@ -282,6 +304,43 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     }
 
     /// <summary>
+    /// Sends the expiry of the kit items among the items to the game client, which shows it on them.
+    /// Bots and offline levelings have no client. A failure is only logged: the kit stays as it is.
+    /// </summary>
+    /// <param name="player">The player.</param>
+    /// <param name="kit">The kit.</param>
+    /// <param name="items">The items, of which the items of the kit are sent, at their slots.</param>
+    /// <returns>The task.</returns>
+    internal static async ValueTask SendExpiryAsync(Player player, ActiveStarterKit kit, IEnumerable<Item> items)
+    {
+        try
+        {
+            await player.GetConnection().SendPeriodItemsAsync(kit.GetPeriodItems(items)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            player.Logger.LogWarning(ex, "Couldn't send the expiry of the starter kit to the client of {Character}.", player.Name);
+        }
+    }
+
+    /// <summary>
+    /// Sends the expiry of a moved kit item to the game client, for its new slot, since the client
+    /// marks the slot. A move which failed leaves the item at its old slot, which is sent, too.
+    /// </summary>
+    /// <param name="player">The player.</param>
+    /// <param name="kit">The kit of the player.</param>
+    /// <param name="item">The moved item.</param>
+    /// <param name="inventory">The inventory of the player; an item elsewhere isn't sent.</param>
+    /// <returns>The task.</returns>
+    internal static async ValueTask SendExpiryOfMoveAsync(Player player, ActiveStarterKit kit, Item item, IStorage? inventory)
+    {
+        if (ReferenceEquals(inventory?.GetItem(item.ItemSlot), item))
+        {
+            await SendExpiryAsync(player, kit, [item]).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Checks the kit of a character which entered the world: gives it, shows its time left, or removes it.
     /// </summary>
     /// <returns><c>false</c>, if a trade or mix is open, so the check is tried again later.</returns>
@@ -316,6 +375,10 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
 
         kit.LastHourWarned |= kit.ExpiresAt - now <= LastHour;
         await player.ShowMessageAsync(FormatRemaining(kit, now)).ConfigureAwait(false);
+
+        // The inventory went to the client with the selection of the character, before this entry.
+        // Under the lock of the packet handlers, which change the inventory, for the retry of a failed entry.
+        await player.RunPersistenceExclusiveAsync(() => SendExpiryAsync(player, kit, player.Inventory?.Items ?? [])).ConfigureAwait(false);
         return true;
     }
 
@@ -400,6 +463,8 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
                 return true;
             }
 
+            // After the items, which appeared on the client one by one.
+            await SendExpiryAsync(player, kit, items).ConfigureAwait(false);
             ActivityLog.Write("starter_kit", player, new { kit = kitDefinition.Description, expires_at = kit.ExpiresAt });
             await player.ShowMessageAsync("Você ganhou o kit iniciante!", MessageType.GoldenCenter).ConfigureAwait(false);
             await player.ShowMessageAsync($"Kit iniciante: {kitDefinition.Description} +9 excelentes e Pet Panda, por {configuration.Days} dias, no inventário.").ConfigureAwait(false);
