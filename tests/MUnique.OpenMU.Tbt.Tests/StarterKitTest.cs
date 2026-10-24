@@ -17,32 +17,37 @@ public class StarterKitTest
 
     /// <summary>
     /// Every class of a line gets the kit of its line: the weapon, the set (the Magic Gladiator's
-    /// without the helm) and the Pet Panda.
+    /// without the helm), the shield (none for the Fairy Elf), the mini wings and the Pet Panda.
     /// </summary>
     /// <param name="classNumber">The number of the class.</param>
     /// <param name="weapon">The expected weapon, as group/number.</param>
     /// <param name="set">The expected number of the set.</param>
     /// <param name="withHelm">If set to <c>true</c>, the set has a helm.</param>
-    [TestCase(0, "5/1", 2, true)]
-    [TestCase(1, "5/1", 2, true)]
-    [TestCase(4, "0/3", 5, true)]
-    [TestCase(7, "0/3", 5, true)]
-    [TestCase(8, "4/2", 10, true)]
-    [TestCase(12, "0/4", 4, false)]
-    [TestCase(16, "2/1", 0, true)]
-    public void KitOfClass(int classNumber, string weapon, int set, bool withHelm)
+    /// <param name="shield">The expected shield, as group/number, or <c>null</c>.</param>
+    /// <param name="wings">The expected mini wings, as group/number.</param>
+    [TestCase(0, "5/0", 2, true, "6/4", "12/133")]
+    [TestCase(1, "5/0", 2, true, "6/4", "12/133")]
+    [TestCase(4, "0/3", 5, true, "6/6", "12/134")]
+    [TestCase(7, "0/3", 5, true, "6/6", "12/134")]
+    [TestCase(8, "4/2", 10, true, null, "12/132")]
+    [TestCase(12, "0/4", 4, false, "6/2", "12/134")]
+    [TestCase(16, "2/1", 0, true, "6/10", "12/130")]
+    public void KitOfClass(int classNumber, string weapon, int set, bool withHelm, string? shield, string wings)
     {
         var kit = StarterKitCatalog.Get(new CharacterClass { Number = (byte)classNumber });
         var firstGroup = withHelm ? 7 : 8;
         var expected = new[] { weapon }
             .Concat(Enumerable.Range(firstGroup, 12 - firstGroup).Select(group => $"{group}/{set}"))
+            .Concat(shield is null ? [] : [shield])
+            .Append(wings)
             .Append("13/80");
 
         Assert.That(kit?.Items.Select(i => $"{i.Group}/{i.Number}"), Is.EqualTo(expected));
     }
 
     /// <summary>
-    /// The weapons and sets are +9 with three different excellent options; the Panda is +0 without options.
+    /// The weapon, the set and the shield are +9 with three different excellent options and the
+    /// Luck; the mini wings are +9 without options, and the Panda +0 without options.
     /// </summary>
     /// <param name="classNumber">The number of the class.</param>
     [TestCase(0)]
@@ -50,13 +55,15 @@ public class StarterKitTest
     [TestCase(8)]
     [TestCase(12)]
     [TestCase(16)]
-    public void KitItemsArePlusNineWithThreeExcellentOptions(int classNumber)
+    public void KitItemsArePlusNineWithLuck(int classNumber)
     {
         var items = StarterKitCatalog.Get(new CharacterClass { Number = (byte)classNumber })!.Items;
         var panda = items.Single(i => (i.Group, i.Number) == (13, 80));
+        var wings = items.Single(i => i.Group == 12);
 
-        Assert.That(items.Where(i => i != panda).Select(i => (i.Level, i.ExcellentOptions.Distinct().Count())), Is.All.EqualTo(((byte)9, 3)));
-        Assert.That((panda.Level, panda.ExcellentOptions.Count), Is.EqualTo(((byte)0, 0)));
+        Assert.That(items.Where(i => i != panda && i != wings).Select(i => (i.Level, i.ExcellentOptions.Distinct().Count(), i.Luck)), Is.All.EqualTo(((byte)9, 3, true)));
+        Assert.That((wings.Level, wings.ExcellentOptions.Count, wings.Luck), Is.EqualTo(((byte)9, 0, false)));
+        Assert.That((panda.Level, panda.ExcellentOptions.Count, panda.Luck), Is.EqualTo(((byte)0, 0, false)));
     }
 
     /// <summary>

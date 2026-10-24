@@ -382,6 +382,40 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     }
 
     /// <summary>
+    /// Makes the item the given item of a kit, like the server gives it.
+    /// </summary>
+    /// <param name="configuration">The game configuration, with the item definitions.</param>
+    /// <param name="context">The persistence context of the player, which creates the options.</param>
+    /// <param name="item">The new item.</param>
+    /// <param name="kitItem">The item of the kit.</param>
+    /// <exception cref="InvalidOperationException">The item, or one of its options, doesn't exist in the configuration.</exception>
+    internal static void Configure(GameConfiguration configuration, IContext context, Item item, StarterKitItem kitItem)
+    {
+        var definition = configuration.Items.FirstOrDefault(d => d.Group == kitItem.Group && d.Number == kitItem.Number)
+            ?? throw new InvalidOperationException($"The item {kitItem.Group}/{kitItem.Number} of the starter kit doesn't exist.");
+        item.Definition = definition;
+        item.Level = kitItem.Level;
+        item.HasSkill = definition.Skill is not null;
+        var possibleOptions = definition.PossibleItemOptions.SelectMany(o => o.PossibleOptions).ToList();
+        foreach (var number in kitItem.ExcellentOptions)
+        {
+            var option = possibleOptions.FirstOrDefault(o => o.OptionType == ItemOptionTypes.Excellent && o.Number == number)
+                ?? throw new InvalidOperationException($"The item {kitItem.Group}/{kitItem.Number} of the starter kit has no excellent option {number}.");
+            AddOption(context, item, option);
+        }
+
+        if (kitItem.Luck)
+        {
+            var luck = possibleOptions.FirstOrDefault(o => o.OptionType == ItemOptionTypes.Luck)
+                ?? throw new InvalidOperationException($"The item {kitItem.Group}/{kitItem.Number} of the starter kit can't have the Luck.");
+            AddOption(context, item, luck);
+        }
+
+        // After the level and the options, which add to it.
+        item.Durability = item.GetMaximumDurabilityOfOnePiece();
+    }
+
+    /// <summary>
     /// Checks the kit of a character which entered the world: gives it, shows its time left, or removes it.
     /// </summary>
     /// <returns><c>false</c>, if a trade or mix is open, so the check is tried again later.</returns>
@@ -450,7 +484,7 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
                 {
                     var item = player.PersistenceContext.CreateNew<Item>();
                     items.Add(item);
-                    Configure(player, item, kitItem);
+                    Configure(player.GameContext.Configuration, player.PersistenceContext, item, kitItem);
                 }
             }
             catch
@@ -507,31 +541,18 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
             await SendExpiryAsync(player, kit, items).ConfigureAwait(false);
             ActivityLog.Write("starter_kit", player, new { kit = kitDefinition.Description, expires_at = kit.ExpiresAt });
             await player.ShowMessageAsync("Você ganhou o kit iniciante!", MessageType.GoldenCenter).ConfigureAwait(false);
-            await player.ShowMessageAsync($"Kit iniciante: {kitDefinition.Description} +9 excelentes e Pet Panda, por {configuration.Days} dias, no inventário.").ConfigureAwait(false);
+            await player.ShowMessageAsync($"Kit iniciante: {kitDefinition.Description} +9 excelentes com Luck.").ConfigureAwait(false);
+            await player.ShowMessageAsync($"Mais {kitDefinition.Wings} +9 e Pet Panda, por {configuration.Days} dias, no inventário.").ConfigureAwait(false);
             await player.ShowMessageAsync("Distribua seus pontos (tecla C) para equipar o kit. Use /kit para ver o prazo.").ConfigureAwait(false);
             return true;
         }).ConfigureAwait(false);
     }
 
-    private static void Configure(Player player, Item item, StarterKitItem kitItem)
+    private static void AddOption(IContext context, Item item, IncreasableItemOption option)
     {
-        var definition = player.GameContext.Configuration.Items.FirstOrDefault(d => d.Group == kitItem.Group && d.Number == kitItem.Number)
-            ?? throw new InvalidOperationException($"The item {kitItem.Group}/{kitItem.Number} of the starter kit doesn't exist.");
-        item.Definition = definition;
-        item.Level = kitItem.Level;
-        item.HasSkill = definition.Skill is not null;
-        foreach (var number in kitItem.ExcellentOptions)
-        {
-            var option = definition.PossibleItemOptions.SelectMany(o => o.PossibleOptions)
-                .FirstOrDefault(o => o.OptionType == ItemOptionTypes.Excellent && o.Number == number)
-                ?? throw new InvalidOperationException($"The item {kitItem.Group}/{kitItem.Number} of the starter kit has no excellent option {number}.");
-            var optionLink = player.PersistenceContext.CreateNew<ItemOptionLink>();
-            optionLink.ItemOption = option;
-            item.ItemOptions.Add(optionLink);
-        }
-
-        // After the level and the options, which add to it.
-        item.Durability = item.GetMaximumDurabilityOfOnePiece();
+        var optionLink = context.CreateNew<ItemOptionLink>();
+        optionLink.ItemOption = option;
+        item.ItemOptions.Add(optionLink);
     }
 
     private static async ValueTask DeleteAsync(Player player, IEnumerable<Item> items)

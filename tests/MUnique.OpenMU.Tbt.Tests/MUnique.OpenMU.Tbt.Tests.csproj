@@ -40,6 +40,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The item data of a new Season 6 database, which the starter kits are checked against. -->
+    <ProjectReference Include="..\..\src\Persistence\Initialization\MUnique.OpenMU.Persistence.Initialization.csproj" />
+    <ProjectReference Include="..\..\src\Persistence\InMemory\MUnique.OpenMU.Persistence.InMemory.csproj" />
     <ProjectReference Include="..\..\src\Tbt\MUnique.OpenMU.Tbt.csproj" />
   </ItemGroup>
 </Project>
