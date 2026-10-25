@@ -8,18 +8,21 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.GameLogic.MiniGames;
+using MUnique.OpenMU.GameLogic.NPC;
 using MUnique.OpenMU.GameLogic.PlugIns;
 using MUnique.OpenMU.PlugIns;
 
 /// <summary>
 /// The registro (PLANO-SERVIDOR.md, section 8, item 1 of 9.5): entries and exits of the world, resets,
 /// mini game participation and deaths by other players, in <c>tbt.event</c>. Bots are recorded too,
-/// with <c>is_bot</c> set, but only the state of the human characters is tracked.
+/// with <c>is_bot</c> set, but only the state of the human characters is tracked. The exit of a human
+/// carries the counters of the stay (<see cref="SessionCounters"/>).
 /// </summary>
 [PlugIn]
-[Display(Name = "TBT: Registro", Description = "Records the entries and exits of the world, the resets, the mini games and the deaths by other players in the table tbt.event.")]
+[Display(Name = "TBT: Registro", Description = "Records the entries and exits of the world, with the kills, experience, zen and jewels of each stay, the resets, the mini games and the deaths by other players in the table tbt.event.")]
 [Guid("9C3E1A47-2B6D-4F85-A0C9-7E4D2B1F6A38")]
-public class ActivityLogPlugIn : IPlayerStateChangedPlugIn, IMiniGameStartedPlugIn, IMiniGameEndedPlugIn, IAttackableGotKilledPlugIn
+public class ActivityLogPlugIn : IPlayerStateChangedPlugIn, IMiniGameStartedPlugIn, IMiniGameEndedPlugIn, IAttackableGotKilledPlugIn,
+    IPlayerGainedExperiencePlugIn, IMonsterItemDroppedPlugIn, IMonsterMoneyDroppedPlugIn
 {
     /// <summary>
     /// The characters with which the players are in the world; OpenMU takes the character away from
@@ -34,15 +37,17 @@ public class ActivityLogPlugIn : IPlayerStateChangedPlugIn, IMiniGameStartedPlug
         {
             this._characters.AddOrUpdate(player, character);
             ActivityLog.Write("login", player);
-            if (player.IsHuman())
+            if (player.Account is { } account && player.IsHuman())
             {
+                SessionCounters.Start(player, account, character);
                 await this.TrackEntryAsync(player).ConfigureAwait(false);
             }
         }
         else if (TbtPlayerExtensions.IsLeavingWorld(previousState, currentState) && this._characters.TryGetValue(player, out var leftCharacter))
         {
             this._characters.Remove(player);
-            ActivityLog.Write("logout", player, character: leftCharacter);
+            var stay = player.Account is { } leftAccount ? SessionCounters.Finish(player, leftAccount, leftCharacter) : null;
+            ActivityLog.Write("logout", player, stay, leftCharacter);
             if (player.Account is { IsBot: false })
             {
                 try
@@ -100,9 +105,47 @@ public class ActivityLogPlugIn : IPlayerStateChangedPlugIn, IMiniGameStartedPlug
                 minigame = victim.CurrentMiniGame?.Definition.Type.ToString(),
             });
         }
+        else if (killed is Monster { SummonedBy: null } && GetHunter(killer) is { } hunter)
+        {
+            SessionCounters.Of(hunter)?.AddKill();
+        }
 
         return ValueTask.CompletedTask;
     }
+
+    /// <inheritdoc />
+    public ValueTask PlayerGainedExperienceAsync(Player player, int experience, IAttackable killedObject, bool isMasterExperience)
+    {
+        if (!isMasterExperience)
+        {
+            SessionCounters.Of(player)?.AddExperience(experience);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public ValueTask MonsterItemDroppedAsync(AttackableNpcBase monster, Player killer, DroppedItem droppedItem)
+    {
+        SessionCounters.Of(killer)?.AddDroppedItem(droppedItem.Item);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public ValueTask MonsterMoneyDroppedAsync(AttackableNpcBase monster, Player killer, DroppedMoney droppedMoney)
+    {
+        SessionCounters.Of(killer)?.AddDroppedZen(droppedMoney.Amount);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Gets the player who gets the credit of a kill: the killer itself, or the owner of the Dark
+    /// Raven or the summoned monster which killed, as OpenMU credits the experience and the drops.
+    /// </summary>
+    /// <param name="killer">The killer.</param>
+    /// <returns>The player, or <c>null</c> when no player killed.</returns>
+    internal static Player? GetHunter(IAttacker? killer)
+        => killer as Player ?? (killer as IPlayerSurrogate)?.Owner ?? (killer as Monster)?.SummonedBy;
 
     private async ValueTask TrackEntryAsync(Player player)
     {
