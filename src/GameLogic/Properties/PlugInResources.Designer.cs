@@ -2336,6 +2336,24 @@ namespace MUnique.OpenMU.GameLogic.Properties {
                 return ResourceManager.GetString("PeriodicTaskConfiguration_AllowedServerIds_Description", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Days of the week.
+        /// </summary>
+        public static string PeriodicTaskConfiguration_Days_Name {
+            get {
+                return ResourceManager.GetString("PeriodicTaskConfiguration_Days_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The days of the week on which the event runs, in the time zone of the server. No day means every day..
+        /// </summary>
+        public static string PeriodicTaskConfiguration_Days_Description {
+            get {
+                return ResourceManager.GetString("PeriodicTaskConfiguration_Days_Description", resourceCulture);
+            }
+        }
 
         /// <summary>
         ///   Looks up a localized string similar to Handles the phoenix shot weapon skill of the rage fighter class. Additionally to the attacked target, it will hit up to seven additional targets..

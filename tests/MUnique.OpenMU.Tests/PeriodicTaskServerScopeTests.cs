@@ -170,6 +170,45 @@ public class PeriodicTaskServerScopeTests
     }
 
     /// <summary>
+    /// The days survive a save/load round-trip through the plug-in configuration storage.
+    /// </summary>
+    [Test]
+    public void DaysSurviveConfigurationRoundTrip()
+    {
+        var configuration = new PlugInConfiguration();
+        configuration.SetConfiguration(new PeriodicTaskConfiguration { Days = WeekDays.Friday | WeekDays.Saturday }, null);
+
+        Assert.That(configuration.GetConfiguration<PeriodicTaskConfiguration>(null)?.Days, Is.EqualTo(WeekDays.Friday | WeekDays.Saturday));
+    }
+
+    /// <summary>
+    /// A stored configuration from before the days existed deserializes to no day (every day).
+    /// </summary>
+    [Test]
+    public void MissingDaysDeserializeToEveryDay()
+    {
+        var configuration = new PlugInConfiguration { CustomConfiguration = "{\"Timetable\":[]}" };
+
+        Assert.That(configuration.GetConfiguration<PeriodicTaskConfiguration>(null)?.Days, Is.EqualTo(WeekDays.None));
+    }
+
+    /// <summary>
+    /// Without a time in the timetable, there is no next start to report.
+    /// </summary>
+    [Test]
+    public async Task NoCountdownWithoutTimetableAsync()
+    {
+        var plugIn = new TestScopeMiniGamePlugIn { Configuration = new TestMiniGameStartConfiguration() };
+        var contextMock = new Mock<IGameContext>();
+        contextMock.SetupGet(c => c.MiniGames).Returns(Mock.Of<IMiniGameManager>());
+        contextMock.SetupGet(c => c.ServerTimeZone).Returns(TimeZoneInfo.Utc);
+
+        var remaining = await plugIn.GetDurationUntilNextStartAsync(contextMock.Object, new MiniGameDefinition()).ConfigureAwait(false);
+
+        Assert.That(remaining, Is.Null);
+    }
+
+    /// <summary>
     /// Contexts without a game server (e.g. plain test contexts) always run the task.
     /// </summary>
     [Test]
@@ -254,6 +293,7 @@ public class PeriodicTaskServerScopeTests
         var contextMock = new Mock<IGameContext>();
         contextMock.As<IGameServerContext>().SetupGet(c => c.Id).Returns((byte)1);
         contextMock.SetupGet(c => c.MiniGames).Returns(Mock.Of<IMiniGameManager>());
+        contextMock.SetupGet(c => c.ServerTimeZone).Returns(TimeZoneInfo.Utc);
 
         var remaining = await plugIn.GetDurationUntilNextStartAsync(contextMock.Object, new MiniGameDefinition()).ConfigureAwait(false);
 

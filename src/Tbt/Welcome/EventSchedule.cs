@@ -22,19 +22,13 @@ internal static class EventSchedule
     public const string BloodCastle = "Blood Castle";
 
     /// <summary>
-    /// Gets the next events, starting now.
+    /// Gets the next events of the coming 24 hours, starting now, on the days on which they run.
     /// </summary>
     /// <param name="gameContext">The game context.</param>
     /// <param name="count">The maximum number of events.</param>
     /// <returns>The next events, with their start time in UTC.</returns>
     public static IEnumerable<(TimeOnly Start, string Name)> GetNextEvents(IGameContext gameContext, int count)
-    {
-        var now = TimeOnly.FromDateTime(DateTime.UtcNow);
-        return GetTimetables(gameContext)
-            .SelectMany(e => e.Timetable.Select(time => (Start: time, e.Name)))
-            .OrderBy(e => e.Start >= now ? e.Start - now : e.Start - now + TimeSpan.FromDays(1))
-            .Take(count);
-    }
+        => GetNextEvents(gameContext, count, DateTime.UtcNow);
 
     /// <summary>
     /// Gets the times of an event in the day, in UTC.
@@ -45,12 +39,33 @@ internal static class EventSchedule
     public static IReadOnlyList<TimeOnly> GetTimes(IGameContext gameContext, string name)
         => GetTimetables(gameContext)
             .Where(e => e.Name == name)
-            .SelectMany(e => e.Timetable)
+            .SelectMany(e => e.Configuration.Timetable)
             .Distinct()
             .OrderBy(time => time.Add(TbtTime.ShownOffset))
             .ToList();
 
-    private static IEnumerable<(string Name, IList<TimeOnly> Timetable)> GetTimetables(IGameContext gameContext)
+    /// <summary>
+    /// Gets the next events of the 24 hours after the specified time, on the days on which they run.
+    /// </summary>
+    /// <param name="gameContext">The game context.</param>
+    /// <param name="count">The maximum number of events.</param>
+    /// <param name="utcNow">The current time, in UTC.</param>
+    /// <returns>The next events, with their start time in UTC.</returns>
+    internal static IEnumerable<(TimeOnly Start, string Name)> GetNextEvents(IGameContext gameContext, int count, DateTime utcNow)
+    {
+        var timeZone = gameContext.ServerTimeZone;
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utcNow, timeZone));
+        return GetTimetables(gameContext)
+            .SelectMany(e => new[] { today, today.AddDays(1) }
+                .SelectMany(date => e.Configuration.GetStartsUtc(date, timeZone))
+                .Select(startsAt => (StartsAt: startsAt, e.Name)))
+            .Where(e => e.StartsAt >= utcNow && e.StartsAt < utcNow.AddDays(1))
+            .OrderBy(e => e.StartsAt)
+            .Take(count)
+            .Select(e => (TimeOnly.FromDateTime(e.StartsAt), e.Name));
+    }
+
+    private static IEnumerable<(string Name, PeriodicTaskConfiguration Configuration)> GetTimetables(IGameContext gameContext)
     {
         foreach (var plugIn in gameContext.PlugInManager.GetActivePlugInsOf<IPeriodicTaskPlugIn>())
         {
@@ -69,7 +84,7 @@ internal static class EventSchedule
 
             if (entry.Configuration is { Timetable.Count: > 0 } configuration)
             {
-                yield return (entry.Name, configuration.Timetable);
+                yield return (entry.Name, configuration);
             }
         }
     }

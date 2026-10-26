@@ -79,9 +79,10 @@ public abstract class MiniGameStartBasePlugIn<TConfiguration, TGameState> : Peri
             return ValueTask.FromResult<TimeSpan?>(null);
         }
 
-        var timeNow = new TimeOnly(DateTime.UtcNow.TimeOfDay.Ticks);
-        var nextRun = this.Configuration?.Timetable.Where(time => time > timeNow).Order().FirstOrDefault();
-        return ValueTask.FromResult(nextRun - timeNow);
+        // The next start follows the time zone and the days of the configuration, also when it's on another day.
+        var utcNow = DateTime.UtcNow;
+        var nextStartUtc = this.Configuration?.GetNextStartUtc(utcNow, gameContext.ServerTimeZone);
+        return ValueTask.FromResult(nextStartUtc - utcNow);
     }
 
     /// <inheritdoc />

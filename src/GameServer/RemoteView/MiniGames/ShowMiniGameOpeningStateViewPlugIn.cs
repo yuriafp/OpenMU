@@ -54,9 +54,11 @@ public class ShowMiniGameOpeningStateViewPlugIn : IShowMiniGameOpeningStatePlugI
         }
         else
         {
+            // The other mini games have only one byte for the minutes. A start which is days away, e.g. of
+            // an event on some days of the week, shows the maximum instead of wrapping around.
             await this._player.Connection.SendMiniGameOpeningStateAsync(
                Convert(miniGameType),
-               (byte)(minutesUntilNextStart % 0x100),
+               (byte)Math.Min(minutesUntilNextStart, 0xFF),
                (byte)playerCount,
                0)
            .ConfigureAwait(false);

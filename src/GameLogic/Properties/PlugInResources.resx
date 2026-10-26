@@ -1173,6 +1173,12 @@
   <data name="PeriodicTaskConfiguration_AllowedServerIds_Description" xml:space="preserve">
     <value>Restricts the event to the selected game servers. An empty selection means the event runs on all servers.</value>
   </data>
+  <data name="PeriodicTaskConfiguration_Days_Name" xml:space="preserve">
+    <value>Days of the week</value>
+  </data>
+  <data name="PeriodicTaskConfiguration_Days_Description" xml:space="preserve">
+    <value>The days of the week on which the event runs, in the time zone of the server. No day means every day.</value>
+  </data>
   <data name="PeriodicTaskConfiguration_PreStartMessageDelay_Name" xml:space="preserve">
     <value>Pre-start message delay</value>
   </data>

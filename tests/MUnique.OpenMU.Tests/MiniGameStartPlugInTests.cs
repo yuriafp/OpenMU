@@ -349,6 +349,7 @@ public class MiniGameStartPlugInTests
         contextMock.SetupGet(c => c.Configuration).Returns(new GameConfiguration());
         contextMock.SetupGet(c => c.DropGenerator).Returns(NullDropGenerator.Instance);
         contextMock.SetupGet(c => c.MiniGames).Returns(manager);
+        contextMock.SetupGet(c => c.ServerTimeZone).Returns(TimeZoneInfo.Utc);
         return (contextMock, manager);
     }
 

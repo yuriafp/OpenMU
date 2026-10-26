@@ -54,6 +54,13 @@ public class PeriodicTaskConfiguration
     public IList<byte> AllowedServerIds { get; set; } = new List<byte>();
 
     /// <summary>
+    /// Gets or sets the days of the week on which the event runs, in the time zone of the server.
+    /// No day means every day, which is also what a configuration without this setting gets.
+    /// </summary>
+    [Display(ResourceType = typeof(PlugInResources), Name = nameof(PlugInResources.PeriodicTaskConfiguration_Days_Name), Description = nameof(PlugInResources.PeriodicTaskConfiguration_Days_Description), Order = 7)]
+    public WeekDays Days { get; set; }
+
+    /// <summary>
     /// Generate a sequence of time points like [00:00, 00:01, ...].
     /// </summary>
     /// <param name="duration">The duration.</param>
@@ -83,6 +90,16 @@ public class PeriodicTaskConfiguration
     }
 
     /// <summary>
+    /// Determines whether the event runs on the specified day of the week.
+    /// </summary>
+    /// <param name="day">The day of the week, in the time zone of the server.</param>
+    /// <returns><c>true</c> if the event runs on the day; otherwise, <c>false</c>.</returns>
+    public bool RunsOn(DayOfWeek day)
+    {
+        return this.Days == WeekDays.None || this.Days.HasFlag((WeekDays)(1 << (int)day));
+    }
+
+    /// <summary>
     /// Check if current time is OK for starting an invasion.
     /// </summary>
     /// <param name="serverTimeZone">
@@ -98,6 +115,11 @@ public class PeriodicTaskConfiguration
         }
 
         var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, serverTimeZone);
+        if (!this.RunsOn(nowLocal.DayOfWeek))
+        {
+            return false;
+        }
+
         var nowTime = TimeOnly.FromDateTime(nowLocal);
         var earlier = nowTime.Add(TimeSpan.FromSeconds(-5));
 
@@ -106,7 +128,7 @@ public class PeriodicTaskConfiguration
     }
 
     /// <summary>
-    /// Gets the next start time of the task, according to the <see cref="Timetable"/>.
+    /// Gets the next start time of the task, according to the <see cref="Timetable"/> and the <see cref="Days"/>.
     /// </summary>
     /// <param name="utcNow">The current time, in UTC.</param>
     /// <param name="serverTimeZone">The time zone of the server, in which the times of the <see cref="Timetable"/> are defined.</param>
@@ -114,21 +136,42 @@ public class PeriodicTaskConfiguration
     public DateTime? GetNextStartUtc(DateTime utcNow, TimeZoneInfo serverTimeZone)
     {
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utcNow, serverTimeZone));
-        DateTime? result = null;
 
-        // Today, the remaining times of the timetable can still come; otherwise the first one of tomorrow.
-        foreach (var date in new[] { today, today.AddDays(1) })
+        // Today, the remaining times of the timetable can still come; otherwise the first one of the
+        // next day on which the event runs, which is at most a week away.
+        for (var date = today; date <= today.AddDays(7); date = date.AddDays(1))
         {
-            foreach (var time in this.Timetable)
+            var nextStartUtc = this.GetStartsUtc(date, serverTimeZone).Where(start => start > utcNow).Select(start => (DateTime?)start).Min();
+            if (nextStartUtc is not null)
             {
-                var startUtc = TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(time, DateTimeKind.Unspecified), serverTimeZone);
-                if (startUtc > utcNow && (result is null || startUtc < result))
-                {
-                    result = startUtc;
-                }
+                return nextStartUtc;
             }
         }
 
-        return result;
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the start times of the task on a day, if it runs on that day.
+    /// </summary>
+    /// <param name="date">The day, in the time zone of the server.</param>
+    /// <param name="serverTimeZone">The time zone of the server, in which the times of the <see cref="Timetable"/> are defined.</param>
+    /// <returns>The start times on the day, in UTC.</returns>
+    public IEnumerable<DateTime> GetStartsUtc(DateOnly date, TimeZoneInfo serverTimeZone)
+    {
+        if (!this.RunsOn(date.DayOfWeek))
+        {
+            yield break;
+        }
+
+        foreach (var time in this.Timetable)
+        {
+            // A time which the clock skips when it moves forward never comes on that day.
+            var startLocal = date.ToDateTime(time, DateTimeKind.Unspecified);
+            if (!serverTimeZone.IsInvalidTime(startLocal))
+            {
+                yield return TimeZoneInfo.ConvertTimeToUtc(startLocal, serverTimeZone);
+            }
+        }
     }
 }
