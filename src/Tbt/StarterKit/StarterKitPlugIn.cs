@@ -68,7 +68,7 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
     ];
 
     /// <summary>The periodic checks, by game server: they share this instance.</summary>
-    private readonly ConcurrentDictionary<GameContext, StarterKitCheckState> _checks = new();
+    private readonly ConcurrentDictionary<GameContext, PeriodicCheck> _checks = new();
 
     /// <summary>
     /// The players whose kit couldn't be checked at the entry, e.g. because the database didn't
@@ -142,7 +142,7 @@ public class StarterKitPlugIn : ICharacterCreatedPlugIn, IPlayerStateChangedPlug
             return;
         }
 
-        var check = this._checks.GetOrAdd(gameContext, _ => new StarterKitCheckState());
+        var check = this._checks.GetOrAdd(gameContext, _ => new PeriodicCheck());
         if (!check.TryStart(now, CheckInterval))
         {
             return;

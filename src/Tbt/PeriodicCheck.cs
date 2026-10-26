@@ -1,16 +1,16 @@
-﻿// <copyright file="StarterKitCheckState.cs" company="MUnique">
+﻿// <copyright file="PeriodicCheck.cs" company="MUnique">
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 // </copyright>
 
-namespace MUnique.OpenMU.Tbt.StarterKit;
+namespace MUnique.OpenMU.Tbt;
 
 using System.Threading;
 
 /// <summary>
-/// The periodic check of the starter kits on one game server. All game servers of the process share
-/// the plugin instance, so each one keeps its own interval and guard.
+/// The periodic check of a plugin on one game server, e.g. of the starter kits. All game servers of the
+/// process share the plugin instance, so each one keeps its own interval and guard.
 /// </summary>
-internal sealed class StarterKitCheckState
+internal sealed class PeriodicCheck
 {
     private DateTime _nextCheckUtc = DateTime.UtcNow;
 

@@ -140,7 +140,7 @@ public class StarterKitTest
     public void CheckRunsOncePerInterval()
     {
         var interval = TimeSpan.FromSeconds(5);
-        var check = new StarterKitCheckState();
+        var check = new PeriodicCheck();
         var now = DateTime.UtcNow;
 
         Assert.That(check.TryStart(now, interval), Is.True);
