@@ -1,18 +1,13 @@
-// <copyright file="SessionCountersTest.cs" company="MUnique">
+﻿// <copyright file="SessionCountersTest.cs" company="MUnique">
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 // </copyright>
 
 namespace MUnique.OpenMU.Tbt.Tests;
 
 using System.Text.Json;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using MUnique.OpenMU.DataModel.Configuration;
 using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.GameLogic.Bots;
-using MUnique.OpenMU.GameServer;
-using MUnique.OpenMU.Persistence;
-using MUnique.OpenMU.PlugIns;
 using MUnique.OpenMU.Tbt.Registro;
 using BasicModel = MUnique.OpenMU.Persistence.BasicModel;
 
@@ -83,7 +78,7 @@ public class SessionCountersTest
     [Test]
     public void TheKillCountsForTheHunter()
     {
-        var player = new BotPlayer(CreateGameContext());
+        var player = new BotPlayer(TestGameContext.Create());
         var raven = new Mock<IPlayerSurrogate>();
         raven.SetupGet(r => r.Owner).Returns(player);
         var otherAttacker = new Mock<IAttacker>();
@@ -131,7 +126,7 @@ public class SessionCountersTest
     public void TheCountersEndOnce()
     {
         var (account, character) = CreateCharacter();
-        var player = new BotPlayer(CreateGameContext());
+        var player = new BotPlayer(TestGameContext.Create());
         Assert.That(SessionCounters.Finish(player, account, character), Is.Null);
 
         SessionCounters.Start(player, account, character);
@@ -152,18 +147,6 @@ public class SessionCountersTest
         var account = new BasicModel.Account { Vault = vault };
         var character = new BasicModel.Character { Experience = 1000, Inventory = inventory };
         return (account, character);
-    }
-
-    private static IGameServerContext CreateGameContext()
-    {
-        var manager = new PlugInManager(null, new NullLoggerFactory(), null, null);
-        var gameContext = new Mock<IGameServerContext>();
-        gameContext.Setup(c => c.PersistenceContextProvider).Returns(new Mock<IPersistenceContextProvider>().Object);
-        gameContext.Setup(c => c.Configuration).Returns(new GameConfiguration());
-        gameContext.Setup(c => c.PlugInManager).Returns(manager);
-        gameContext.Setup(c => c.FeaturePlugIns).Returns(new FeaturePlugInContainer(manager));
-        gameContext.Setup(c => c.LoggerFactory).Returns(new NullLoggerFactory());
-        return gameContext.Object;
     }
 
     private static BasicModel.Item Item(BasicModel.ItemDefinition definition, byte level = 0)
