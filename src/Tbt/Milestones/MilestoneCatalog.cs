@@ -14,9 +14,6 @@ using MUnique.OpenMU.Tbt.Welcome;
 /// </summary>
 internal static class MilestoneCatalog
 {
-    /// <summary>The Box of Kundun +1 is the item 14/11 at level 8; +2 is level 9 and so on.</summary>
-    private const byte BoxOfKundunPlusOneLevel = 8;
-
     private static readonly RewardItem JewelOfBless = new(14, 13);
     private static readonly RewardItem JewelOfSoul = new(14, 14);
     private static readonly RewardItem JewelOfLife = new(14, 16);
@@ -103,8 +100,8 @@ internal static class MilestoneCatalog
             $"reset{reset}",
             0,
             reset,
-            [new RewardItem(14, 11, (byte)(BoxOfKundunPlusOneLevel + plus - 1))],
-            $"Box of Kundun +{plus}",
+            [new RewardItem(BoxOfKundun.Group, BoxOfKundun.Number, BoxOfKundun.LevelOf(plus))],
+            BoxOfKundun.NameOf(plus),
             null);
     }
 

@@ -8,6 +8,7 @@ using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.GameLogic.PlugIns;
 using MUnique.OpenMU.GameLogic.PlugIns.InvasionEvents;
 using MUnique.OpenMU.GameLogic.PlugIns.PeriodicTasks;
+using MUnique.OpenMU.Tbt.BossInvasion;
 
 /// <summary>
 /// The agenda of the events, read from the timetables of the active event plugins, so it never
@@ -79,6 +80,7 @@ internal static class EventSchedule
                 RedDragonInvasionPlugIn p => ("Red Dragon", p.Configuration),
                 WhiteWizardInvasionPlugIn p => ("White Wizard", p.Configuration),
                 HappyHourPlugIn p => ("Happy Hour", p.Configuration),
+                BossInvasionPlugInBase p => ("Invasão de chefes", p.Configuration),
                 _ => (string.Empty, null),
             };
 

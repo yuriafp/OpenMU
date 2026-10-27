@@ -22,13 +22,6 @@ using MUnique.OpenMU.Tbt.Registro;
 [Guid("B27F4C83-5D1E-4A6B-8C39-2E7D5A1F9C64")]
 public class DropAnnouncementPlugIn : IMonsterItemDroppedPlugIn, ISupportCustomConfiguration<DropAnnouncementConfiguration>, ISupportDefaultCustomConfiguration
 {
-    /// <summary>The Box of Kundun is item 14/11; its levels 8 to 12 are the boxes +1 to +5.</summary>
-    private const byte BoxOfKundunGroup = 14;
-
-    private const short BoxOfKundunNumber = 11;
-
-    private const byte BoxOfKundunPlusOneLevel = 8;
-
     /// <inheritdoc />
     public DropAnnouncementConfiguration? Configuration { get; set; }
 
@@ -70,11 +63,10 @@ public class DropAnnouncementPlugIn : IMonsterItemDroppedPlugIn, ISupportCustomC
             return null;
         }
 
-        if (definition.Group == BoxOfKundunGroup && definition.Number == BoxOfKundunNumber)
+        if (definition.Group == BoxOfKundun.Group && definition.Number == BoxOfKundun.Number)
         {
-            // The definition is named after its level 0, the Box of Luck.
-            var plus = item.Level - BoxOfKundunPlusOneLevel + 1;
-            return configuration.MinimumBoxOfKundun > 0 && plus >= configuration.MinimumBoxOfKundun ? $"Box of Kundun +{plus}" : null;
+            var plus = BoxOfKundun.PlusOf(item.Level);
+            return configuration.MinimumBoxOfKundun > 0 && plus >= configuration.MinimumBoxOfKundun ? BoxOfKundun.NameOf(plus) : null;
         }
 
         var name = definition.Name.ValueInNeutralLanguage;

@@ -17,6 +17,10 @@ public class BasicMonsterIntelligence : INpcIntelligence, IDisposable
     private Timer? _aiTimer;
     private Monster? _monster;
 
+    // The ticks of the interval of ChangeTickInterval, 0 for the attack delay; a long, so that the timer
+    // thread which changes it and a start on another thread don't tear it.
+    private long _tickIntervalTicks;
+
     /// <summary>
     /// Finalizes an instance of the <see cref="BasicMonsterIntelligence"/> class.
     /// </summary>
@@ -54,9 +58,11 @@ public class BasicMonsterIntelligence : INpcIntelligence, IDisposable
     /// <inheritdoc/>
     public void Start()
     {
-        var startDelay = this.Npc.Definition.AttackDelay + TimeSpan.FromMilliseconds(Rand.NextInt(0, 100));
+        var tickIntervalTicks = Interlocked.Read(ref this._tickIntervalTicks);
+        var tickInterval = tickIntervalTicks > 0 ? TimeSpan.FromTicks(tickIntervalTicks) : this.Npc.Definition.AttackDelay;
+        var startDelay = tickInterval + TimeSpan.FromMilliseconds(Rand.NextInt(0, 100));
         this.OnStart();
-        this._aiTimer ??= new Timer(_ => this.SafeTick(), null, startDelay, this.Npc.Definition.AttackDelay);
+        this._aiTimer ??= new Timer(_ => this.SafeTick(), null, startDelay, tickInterval);
     }
 
     /// <inheritdoc/>
@@ -101,6 +107,24 @@ public class BasicMonsterIntelligence : INpcIntelligence, IDisposable
     protected virtual void OnStart()
     {
         // can be overwritten for additional logic.
+    }
+
+    /// <summary>
+    /// Changes how often the monster acts, which is its attack delay otherwise, e.g. faster in rage.
+    /// It keeps the interval when it starts again after a pause.
+    /// </summary>
+    /// <param name="interval">The interval.</param>
+    protected void ChangeTickInterval(TimeSpan interval)
+    {
+        Interlocked.Exchange(ref this._tickIntervalTicks, interval.Ticks);
+        try
+        {
+            this._aiTimer?.Change(interval, interval);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Paused meanwhile; the next start takes the interval.
+        }
     }
 
     /// <summary>
