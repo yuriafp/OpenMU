@@ -76,6 +76,32 @@ public class PlayerInMemoryContext : InMemoryContext, IPlayerContext
     }
 
     /// <inheritdoc/>
+    public async ValueTask<IReadOnlyList<MiniGameRankingSummary>> GetMiniGameLeaderboardAsync(IReadOnlyCollection<Guid> miniGameIds, DateTime? since, int count, CancellationToken cancellationToken = default)
+    {
+        var allAccounts = await this.Provider.GetRepository<Account>().GetAllAsync(cancellationToken).ConfigureAwait(false);
+        var characters = allAccounts
+            .Where(a => !a.IsTemplate && !a.IsBot)
+            .SelectMany(a => a.Characters)
+            .ToDictionary(c => c.GetId());
+        var entries = await this.Provider.GetRepository<MiniGameRankingEntry>().GetAllAsync(cancellationToken).ConfigureAwait(false);
+        return entries
+            .Where(e => e.MiniGame is { } miniGame && miniGameIds.Contains(miniGame.GetId()) && (since is null || e.Timestamp >= since))
+            .Where(e => e.Character is not null)
+            .GroupBy(e => e.Character!.GetId())
+            .Where(g => characters.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var character = characters[g.Key];
+                return new MiniGameRankingSummary(g.Key, character.Name, character.CharacterClass?.GetId(), g.Sum(e => (long)e.Score), g.Max(e => e.Score), g.Count());
+            })
+            .OrderByDescending(s => s.TotalScore)
+            .ThenByDescending(s => s.BestScore)
+            .ThenBy(s => s.CharacterName)
+            .Take(count)
+            .ToList();
+    }
+
+    /// <inheritdoc/>
     public async ValueTask<IEnumerable<MUnique.OpenMU.DataModel.Entities.Account>> SearchAccountsAsync(string searchTerm, int skip, int count, CancellationToken cancellationToken = default)
     {
         var allAccounts = await this.Provider.GetRepository<Account>().GetAllAsync(cancellationToken).ConfigureAwait(false);
@@ -85,6 +111,16 @@ public class PlayerInMemoryContext : InMemoryContext, IPlayerContext
             .OrderBy(a => a.LoginName)
             .Skip(skip)
             .Take(count);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<(IReadOnlyList<DataModel.Entities.Account> Accounts, int Total)> SearchAccountPageAsync(string text, DataModel.Entities.AccountState? state, int offset, int limit, CancellationToken cancellationToken = default)
+    {
+        var accounts = await this.Provider.GetRepository<Account>().GetAllAsync(cancellationToken).ConfigureAwait(false);
+        var matches = accounts.Where(a => (state == null || a.State == state)
+            && (a.LoginName.Contains(text, StringComparison.OrdinalIgnoreCase) || a.EMail.Contains(text, StringComparison.OrdinalIgnoreCase)
+                || a.Characters.Any(c => c.Name.Contains(text, StringComparison.OrdinalIgnoreCase)))).OrderBy(a => a.LoginName).ThenBy(a => a.GetId()).ToList();
+        return (matches.Skip(offset).Take(limit).ToList(), matches.Count);
     }
 
     /// <inheritdoc/>
@@ -201,6 +237,22 @@ public class PlayerInMemoryContext : InMemoryContext, IPlayerContext
             .GetAllAsync(cancellationToken)
             .ConfigureAwait(false);
         return accounts.FirstOrDefault(account => account.Id == accountId)?.ChatBanUntil;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<DataModel.Entities.GuildChatBinding>> GetGuildChatBindingsAsync(
+        Guid guildId,
+        Guid allianceMasterGuildId,
+        CancellationToken cancellationToken = default)
+    {
+        var bindings = await this.Provider.GetRepository<GuildChatBinding>()
+            .GetAllAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return bindings
+            .Where(binding => (binding.GuildId == guildId && binding.Scope == DataModel.Entities.GuildChatScope.Guild)
+                              || (binding.GuildId == allianceMasterGuildId && binding.Scope == DataModel.Entities.GuildChatScope.Alliance))
+            .Cast<DataModel.Entities.GuildChatBinding>()
+            .ToList();
     }
 
     /// <inheritdoc />

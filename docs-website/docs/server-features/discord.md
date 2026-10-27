@@ -152,7 +152,13 @@ Linked users get the role *Linked Player* of the
 for example, open channels only for players. The bot needs the *Manage Roles*
 permission for it, and its own role has to be above *Linked Player* in the role
 list. When a link is removed, also in the admin panel, the role is removed
-again.
+again, and the player loses access to the channels of guilds. If the bot isn't
+connected or can't remove the role, it retries it later, also after the Discord
+settings were changed. The role is removed on the Discord server on which it was
+given, also when you choose another server or layout in the meantime. If the bot
+isn't in that server anymore, it logs a warning and retries it when it's added
+again. These retries are only kept in memory: after a restart of the server,
+remove a role which is left over by hand.
 
 The answers to these commands are only visible to the player who used them.
 The codes are stored as hash in the database, and every code can only be used
@@ -247,29 +253,48 @@ The guild master links the Discord user to the account (see
 with `/character`. Then there are two ways, which you can restrict in the chat
 bridge settings of the Discord page:
 
-* **On your Discord server:** `/guildchat create` creates a channel like
-  `#guild-legends` in the category *Guilds* of the layout. Only the bot and the
-  members of the guild who linked their Discord user can see it. The bot keeps
-  this up to date when users link themselves and every 10 status updates. It
-  needs the *Manage Channels* permission for it.
+* **On your Discord server:** as soon as the guild master is linked, the bot
+  creates a channel like `#guild-legends` in the category *Guilds* of the
+  layout, and binds the guild chat to it. The guild master can also do it with
+  `/guildchat create`, e.g. for the chat of the alliance. Only the bot and the
+  members of the guild who linked their Discord user can see the channel. The
+  linked guild master can moderate the messages in it (*Manage Messages*, only
+  in this channel). The bot keeps this up to date when users link themselves
+  and every 10 status updates, e.g. for new guilds, new members and a new
+  guild master. It never creates a second channel for a guild: it reuses the
+  bound channel. It doesn't reuse other existing channels, even with the name of
+  the guild, because others might see them. Only the selected character counts:
+  the guild master has to select the guild master character with `/character`,
+  for the channel and for the moderation. It needs the
+  *Manage Channels* and *Manage Messages* permissions for it; *Check
+  permissions and channels* on the Discord page tells if one is missing. Turn
+  off *Create guild channels automatically* on the Discord page
+  (`Discord__Bot__ChatBridge__AutoCreateHostedChannels`) if only `/guildchat
+  create` should create them.
 * **On the Discord server of the guild:** the guild master invites the bot to
   the Discord server of the guild, and uses `/guildchat bind` in the channel
   which should be bound. This requires the permission to manage the channel. You
-  can allow only some Discord servers.
+can allow only some Discord servers with
+`Discord__Bot__ChatBridge__AllowedDiscordServerIds`.
 
 The option `scope` of these commands chooses the chat of the alliance instead,
-which only the master of an alliance can bind. `/guildchat unbind` in the channel
-removes the binding; the guild master and users who manage the channel can use it.
+which only the master of an alliance can bind. A bound chat isn't moved to
+another channel silently: use `/guildchat unbind` in the bound channel first.
+`/guildchat unbind` removes the binding; the current guild master and users who
+manage the channel can use it, so the administrators of a Discord server can
+always remove a binding from their server. A former guild master can't change
+the binding anymore.
 The binding is also removed when the guild is disbanded, the channel is deleted
-or the bot is removed from the Discord server.
+or the bot is removed from the Discord server. You can also remove bindings on
+the Discord page of the admin panel.
 
 ### Writing from Discord
 
 Only Discord users who are linked to an account can write into the game, as
 their selected character, which has to be a member of the guild or alliance. The
 chat ban of the account applies, and a user can send 10 messages per minute,
-by default. The messages go through the
-plugins of the plugin point *External chat message received*, e.g. a filter,
+by default (`Discord__Bot__ChatBridge__MaximumMessagesPerMinute`). The messages
+go through the plugins of the plugin point *External chat message received*, e.g. a filter,
 which can stop them; the plugins of *Chat message received* only get the
 messages of players in the game.
 
@@ -280,12 +305,39 @@ and long messages are cut, by default after 100 characters.
 
 To read the normal messages in the channels, the bot needs the privileged
 *Message Content* intent: enable it for the bot in the Discord developer portal
-under *Bot → Privileged Gateway Intents*, and turn on *Read messages* on the
-Discord page. When a message can't be sent to the
-game, the bot reacts with ❌ (permission *Add Reactions*), and `/say` tells why.
+under *Bot → Privileged Gateway Intents*, then turn on *Read messages* on the
+Discord page or set `Discord__Bot__ChatBridge__ReadMessages` to `true`. When a
+message can't be sent to the game, the bot reacts with ❌ (permission *Add Reactions*), and `/say` tells why.
 Without the intent, players use `/say <message>`. Discord only approves the
 intent for verified bots, which are in more than 100 Discord servers, with a
 reason.
+
+## The game client
+
+[MuMain](https://github.com/sven-n/MuMain), the open source game client, has
+its own Discord features. It asks the server how it's connected to Discord, when
+the character enters the game:
+
+* its **Discord** button opens the invite to your Discord server,
+* its **Rich Presence** shows the state of the player in the Discord profile,
+  with your Discord application,
+* players link and unlink their account in a dialog, without typing
+  `/discord link`,
+* messages written in Discord are shown as such, with the colours of the guild,
+  alliance or world chat, and can't be mistaken for messages of a character.
+
+For this, activate the feature plugin *Discord integration of the client* and
+fill its configuration:
+
+| Setting | Description |
+|---|---|
+| `InviteUrl` | The invite link to your Discord server, e.g. `https://discord.gg/abc123`. Create one which doesn't expire. |
+| `RichPresenceApplicationId` | The id of the Discord application which the client uses for the Rich Presence, usually the one of your bot (*General Information → Application ID* in the developer portal). |
+| `RichPresenceLargeImageKey`, `RichPresenceSmallImageKey` | The keys of the images of the Rich Presence, uploaded under *Rich Presence → Art Assets*. |
+
+Every player can read these values, so they must not contain secrets. Older game
+clients don't ask for them; they keep getting the messages from Discord as
+normal chat messages with the `@` prefix.
 
 ## Commands for game masters
 
@@ -350,6 +402,7 @@ with the parts separated by two underscores, like `Discord__Bot__Token`.
 | `Bot__StatusUpdateInterval` | `00:01:00` | How often the status message and the presence are updated. |
 | `Bot__ChatBridge__BindingMode` | `Both` | Where the chats of guilds can be bound: `Both`, `HostedOnly` (only channels on your Discord server) or `GuildOwnedOnly` (only on Discord servers of guilds). |
 | `Bot__ChatBridge__AllowedDiscordServerIds__0`, `__1`, … | all | The Discord servers of guilds, on which chats can be bound. |
+| `Bot__ChatBridge__AutoCreateHostedChannels` | `true` | Creates the channel of a guild on your Discord server, as soon as its guild master is linked. Requires that the binding mode allows channels on your Discord server. |
 | `Bot__ChatBridge__ReadMessages` | `false` | Reads the normal messages in the bound channels. Requires the *Message Content* intent. |
 | `Bot__ChatBridge__MaximumMessageLength` | `100` | The maximum length of a message from Discord to the game. |
 | `Bot__ChatBridge__MaximumMessagesPerMinute` | `10` | The maximum number of messages per minute of a Discord user to the game. |

@@ -92,6 +92,15 @@ public interface IPlayerContext : IContext
     /// </returns>
     ValueTask<IEnumerable<Account>> SearchAccountsAsync(string searchTerm, int skip, int count, CancellationToken cancellationToken = default);
 
+    /// <summary>Searches login names, e-mail addresses and character names with an optional state filter.</summary>
+    /// <param name="text">The case-insensitive search term.</param>
+    /// <param name="state">The optional account state.</param>
+    /// <param name="offset">The number of matches to skip.</param>
+    /// <param name="limit">The maximum number of matches.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The matching account page and total count.</returns>
+    ValueTask<(IReadOnlyList<Account> Accounts, int Total)> SearchAccountPageAsync(string text, AccountState? state, int offset, int limit, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets statistics about the player accounts.
     /// </summary>
@@ -99,6 +108,19 @@ public interface IPlayerContext : IContext
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The statistics about the player accounts.</returns>
     ValueTask<AccountStatistics> GetAccountStatisticsAsync(DateTime registeredSince, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the leaderboard of the specified mini games, with the characters ordered by their total score.
+    /// </summary>
+    /// <remarks>
+    /// Characters of template and bot accounts are not included.
+    /// </remarks>
+    /// <param name="miniGameIds">The identifiers of the mini game definitions, e.g. all levels of Blood Castle.</param>
+    /// <param name="since">The optional point in time (UTC) since which finished games are counted.</param>
+    /// <param name="count">The maximum number of characters.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The best characters, ordered by their total score.</returns>
+    ValueTask<IReadOnlyList<MiniGameRankingSummary>> GetMiniGameLeaderboardAsync(IReadOnlyCollection<Guid> miniGameIds, DateTime? since, int count, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the account by character name.
@@ -194,6 +216,19 @@ public interface IPlayerContext : IContext
     /// <returns>The time until which the chat is banned; or <c>null</c>, if it isn't banned.</returns>
     ValueTask<DateTime?> GetAccountChatBanUntilAsync(
         Guid accountId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the bindings of the chat of a guild and of the chat of its alliance to channels of external
+    /// services, without loading the bindings of other guilds.
+    /// </summary>
+    /// <param name="guildId">The persistent identifier of the guild; its <see cref="GuildChatScope.Guild"/> binding is returned.</param>
+    /// <param name="allianceMasterGuildId">The persistent identifier of the master guild of the alliance; its <see cref="GuildChatScope.Alliance"/> binding is returned.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The bindings, at most one per scope.</returns>
+    ValueTask<IReadOnlyList<GuildChatBinding>> GetGuildChatBindingsAsync(
+        Guid guildId,
+        Guid allianceMasterGuildId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
