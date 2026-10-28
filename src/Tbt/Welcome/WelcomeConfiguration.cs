@@ -25,7 +25,7 @@ public class WelcomeConfiguration
     /// Gets or sets the second tip for the player who entered the world.
     /// </summary>
     [Display(Name = "Second Tip", Description = "The second tip for the player who entered the world.")]
-    public string SecondTip { get; set; } = "Dica: a Oficina, em Lorencia, põe Luck e até 3 opções excelentes em itens até +11.";
+    public string SecondTip { get; set; } = "Dica: a Oficina, em Lorencia, põe Luck e até 3 opções excelentes em itens até +11, e até 2 opções nas asas.";
 
     /// <summary>
     /// Gets or sets the message with the next events; <c>{0}</c> is the list of the events.
