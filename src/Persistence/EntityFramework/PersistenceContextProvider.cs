@@ -118,6 +118,27 @@ public class PersistenceContextProvider : IMigratableDatabaseContextProvider
         }
     }
 
+    /// <summary>
+    /// Determines if the database is missing: the database server reports that it doesn't exist, or
+    /// none of its migrations is applied. Unlike <see cref="DatabaseExistsAsync"/>, any other error,
+    /// e.g. of a database server which is still starting, is thrown instead of counting as a missing
+    /// database, because a missing database gets recreated, which drops an existing one.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><c>True</c>, if the database is missing; Otherwise, <c>false</c>.</returns>
+    public async Task<bool> IsDatabaseMissingAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var installationContext = new EntityDataContext();
+            return !(await installationContext.Database.GetAppliedMigrationsAsync(cancellationToken).ConfigureAwait(false)).Any();
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.InvalidCatalogName)
+        {
+            return true;
+        }
+    }
+
     /// <inheritdoc />
     public async Task<bool> CanConnectToDatabaseAsync(CancellationToken cancellationToken = default)
     {

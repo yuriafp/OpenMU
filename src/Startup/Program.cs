@@ -55,6 +55,14 @@ using Serilog.Extensions.Logging;
 /// </summary>
 internal sealed class Program : IDisposable
 {
+    /// <summary>
+    /// The attempts to reach the database server at the start, <see cref="DatabaseServerRetryDelay"/>
+    /// apart, so at least two minutes.
+    /// </summary>
+    private const int DatabaseServerAttempts = 40;
+
+    private static readonly TimeSpan DatabaseServerRetryDelay = TimeSpan.FromSeconds(3);
+
     private static bool _confirmExit;
     private static SystemConfiguration? _systemConfiguration;
 
@@ -736,10 +744,34 @@ internal sealed class Program : IDisposable
         return contextProvider;
     }
 
+    /// <summary>
+    /// Determines if the database is missing, waiting for the database server while it can't be
+    /// reached. When the database server starts together with this process, e.g. by Docker after a
+    /// reboot, it refuses the first connections; taking that for a missing database would drop and
+    /// recreate the existing one.
+    /// </summary>
+    /// <param name="contextProvider">The context provider.</param>
+    /// <returns><c>True</c>, if the database is missing; Otherwise, <c>false</c>.</returns>
+    private async Task<bool> IsDatabaseMissingAsync(PersistenceContextProvider contextProvider)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await contextProvider.IsDatabaseMissingAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (attempt < DatabaseServerAttempts)
+            {
+                this._logger.Warning("The database server can't be reached yet ({Message}), trying again in {Delay}...", ex.Message, DatabaseServerRetryDelay);
+                await Task.Delay(DatabaseServerRetryDelay).ConfigureAwait(false);
+            }
+        }
+    }
+
     private async Task<IMigratableDatabaseContextProvider> PrepareRepositoryProviderAsync(bool reinit, string version, ILoggerFactory loggerFactory, IConfigurationChangeListener changeListener)
     {
         var contextProvider = new PersistenceContextProvider(loggerFactory, changeListener);
-        if (reinit || !await contextProvider.DatabaseExistsAsync().ConfigureAwait(false))
+        if (reinit || await this.IsDatabaseMissingAsync(contextProvider).ConfigureAwait(false))
         {
             // The database can be provisioned externally (e.g. by a Kubernetes operator,
             // infrastructure-as-code, or a managed cloud database), where the connecting role is
