@@ -6,7 +6,6 @@ namespace MUnique.OpenMU.Tbt.CatchUp;
 
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using System.Threading;
 using MUnique.OpenMU.AttributeSystem;
 using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.GameLogic.Attributes;
@@ -39,13 +38,9 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(1);
 
-    private readonly Lock _bonusesLock = new();
-
-    private readonly Dictionary<Player, Bonus> _bonuses = new();
+    private readonly ExperienceBonuses _bonuses = new(typeof(CatchUpBonusPlugIn));
 
     private readonly ConcurrentDictionary<GameContext, PeriodicCheck> _checks = new();
-
-    private int _isSubscribedToDeactivation;
 
     private ILogger? _logger;
 
@@ -62,20 +57,20 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
         {
             if (TbtPlayerExtensions.IsLeavingWorld(previousState, currentState))
             {
-                this.Detach(player);
+                this._bonuses.Detach(player);
                 return;
             }
 
-            if (!TbtPlayerExtensions.IsEnteringWorld(previousState, currentState) || !player.IsHuman() || this.Attach(player) is not { } bonus)
+            if (!TbtPlayerExtensions.IsEnteringWorld(previousState, currentState) || !player.IsHuman() || this._bonuses.Attach(player) is not { } bonus)
             {
                 return;
             }
 
             // The multiplier starts neutral, and gets its value when the most advanced human is known.
-            this.SubscribeToDeactivation(player.GameContext.PlugInManager);
+            this._bonuses.SubscribeToDeactivation(player.GameContext.PlugInManager);
             var configuration = this.Configuration ??= new CatchUpBonusConfiguration();
             var leaderResets = await HumanProgress.GetMaximumResetsAsync(configuration.ActiveDays, configuration.GetExcludedAccounts(), this.GetLogger(player.GameContext)).ConfigureAwait(false);
-            if (this.IsAttached(player, bonus))
+            if (this._bonuses.IsAttached(player, bonus))
             {
                 // Otherwise the player left during the read.
                 await UpdateAsync(player, bonus, leaderResets, configuration).ConfigureAwait(false);
@@ -100,9 +95,9 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
 
         try
         {
-            this.SubscribeToDeactivation(gameContext.PlugInManager);
+            this._bonuses.SubscribeToDeactivation(gameContext.PlugInManager);
             var players = await gameContext.GetPlayersAsync().ConfigureAwait(false);
-            this.DetachLeftPlayers(gameContext, players);
+            this._bonuses.DetachLeftPlayers(gameContext, players);
             var humans = players.Where(player => player.IsHuman() && player.IsInWorld()).ToList();
             if (humans.Count == 0)
             {
@@ -116,7 +111,7 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
                 try
                 {
                     // It also attaches the bonus of who entered while the plugin was off.
-                    if (this.Attach(player) is { } bonus)
+                    if (this._bonuses.Attach(player) is { } bonus)
                     {
                         await UpdateAsync(player, bonus, leaderResets, configuration).ConfigureAwait(false);
                     }
@@ -191,7 +186,7 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
         }
     }
 
-    private static async ValueTask UpdateAsync(Player player, Bonus bonus, int? leaderResets, CatchUpBonusConfiguration configuration)
+    private static async ValueTask UpdateAsync(Player player, ExperienceBonus bonus, int? leaderResets, CatchUpBonusConfiguration configuration)
     {
         // While the most advanced human is unknown, e.g. when the database fails, the bonus stays as it is.
         if (leaderResets is not { } leader)
@@ -201,15 +196,9 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
 
         var resets = GetAccountResets(player, bonus.Attributes);
         var percent = GetPercent(resets, leader, configuration);
-        lock (bonus)
+        if (!bonus.TrySetPercent(percent))
         {
-            if (percent == bonus.Percent)
-            {
-                return;
-            }
-
-            bonus.Multiplier.Value = 1 + (percent / 100f);
-            bonus.Percent = percent;
+            return;
         }
 
         ActivityLog.Write("catch_up", player, new { percent, resets, leader });
@@ -245,145 +234,6 @@ public class CatchUpBonusPlugIn : IPlayerStateChangedPlugIn, IPeriodicTaskPlugIn
         return resets;
     }
 
-    /// <summary>
-    /// Gets the bonus of the player, attached to its current attributes. A bonus of other attributes,
-    /// e.g. of a character which the player had while the plugin was off, is replaced.
-    /// </summary>
-    /// <param name="player">The player.</param>
-    /// <returns>The bonus, or <c>null</c> when the player has no attributes.</returns>
-    private Bonus? Attach(Player player)
-    {
-        if (player.Attributes is not { } attributes)
-        {
-            return null;
-        }
-
-        lock (this._bonusesLock)
-        {
-            if (this._bonuses.TryGetValue(player, out var bonus))
-            {
-                if (ReferenceEquals(bonus.Attributes, attributes))
-                {
-                    return bonus;
-                }
-
-                bonus.Attributes.RemoveElement(bonus.Multiplier, Stats.ExperienceRate);
-            }
-
-            bonus = new Bonus(attributes);
-            attributes.AddElement(bonus.Multiplier, Stats.ExperienceRate);
-            this._bonuses[player] = bonus;
-            return bonus;
-        }
-    }
-
-    private void Detach(Player player)
-    {
-        lock (this._bonusesLock)
-        {
-            this.Remove(player);
-        }
-    }
-
-    /// <summary>
-    /// Removes the bonus of the player and its multiplier. Must be called in the <see cref="_bonusesLock"/>.
-    /// </summary>
-    /// <param name="player">The player.</param>
-    private void Remove(Player player)
-    {
-        if (this._bonuses.Remove(player, out var bonus))
-        {
-            bonus.Attributes.RemoveElement(bonus.Multiplier, Stats.ExperienceRate);
-        }
-    }
-
-    private bool IsAttached(Player player, Bonus bonus)
-    {
-        lock (this._bonusesLock)
-        {
-            return this._bonuses.TryGetValue(player, out var current) && ReferenceEquals(current, bonus);
-        }
-    }
-
-    /// <summary>
-    /// Detaches the bonuses of the players which aren't in the world of the game server anymore, e.g.
-    /// which left while the plugin was off.
-    /// </summary>
-    /// <param name="gameContext">The game context.</param>
-    /// <param name="players">The players of the game context.</param>
-    private void DetachLeftPlayers(GameContext gameContext, IList<Player> players)
-    {
-        lock (this._bonusesLock)
-        {
-            foreach (var player in this._bonuses.Keys.ToList())
-            {
-                if (ReferenceEquals(player.GameContext, gameContext) && (!players.Contains(player) || !player.IsInWorld()))
-                {
-                    this.Remove(player);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Subscribes to the deactivation of this plugin, so that switching it off in the admin panel ends
-    /// the bonuses right away. Switching it on again attaches them on the next check.
-    /// </summary>
-    /// <param name="plugInManager">The plugin manager.</param>
-    private void SubscribeToDeactivation(PlugInManager plugInManager)
-    {
-        if (Interlocked.Exchange(ref this._isSubscribedToDeactivation, 1) == 0)
-        {
-            plugInManager.PlugInDeactivated += this.OnPlugInDeactivated;
-        }
-    }
-
-    private void OnPlugInDeactivated(object? sender, PlugInEventArgs e)
-    {
-        if (e.PlugInType != this.GetType())
-        {
-            return;
-        }
-
-        lock (this._bonusesLock)
-        {
-            foreach (var player in this._bonuses.Keys.ToList())
-            {
-                this.Remove(player);
-            }
-        }
-    }
-
     private ILogger GetLogger(IGameContext gameContext)
         => this._logger ??= gameContext.LoggerFactory.CreateLogger(this.GetType().Name);
-
-    /// <summary>
-    /// The bonus of a player during a stay in the world.
-    /// </summary>
-    private sealed class Bonus
-    {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Bonus"/> class.
-        /// </summary>
-        /// <param name="attributes">The attributes of the character, to which the multiplier is attached.</param>
-        public Bonus(AttributeSystem attributes)
-        {
-            this.Attributes = attributes;
-        }
-
-        /// <summary>
-        /// Gets the attributes of the character, to which the multiplier is attached.
-        /// </summary>
-        public AttributeSystem Attributes { get; }
-
-        /// <summary>
-        /// Gets the multiplier of the experience rate of the player.
-        /// </summary>
-        public SimpleElement Multiplier { get; } = new(1, AggregateType.Multiplicate);
-
-        /// <summary>
-        /// Gets or sets the bonus, in percent.
-        /// </summary>
-        public int Percent { get; set; }
-    }
 }
