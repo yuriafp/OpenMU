@@ -73,11 +73,14 @@ public class WeeklySnapshotPlugIn : IPeriodicTaskPlugIn
 
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(10);
 
-    private static readonly TimeSpan WeekTurnOffset = TimeSpan.FromHours(2);
-
     private DateTime _nextCheckUtc = DateTime.UtcNow;
 
     private int _running;
+
+    /// <summary>
+    /// Gets the time of the week turn after the start of the Monday in UTC.
+    /// </summary>
+    internal static TimeSpan WeekTurnOffset { get; } = TimeSpan.FromHours(2);
 
     /// <inheritdoc />
     public async ValueTask ExecuteTaskAsync(GameContext gameContext)

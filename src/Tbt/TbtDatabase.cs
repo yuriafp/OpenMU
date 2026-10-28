@@ -90,6 +90,20 @@ internal static class TbtDatabase
             item_id uuid primary key,
             character_id uuid not null references tbt.starter_kit (character_id) on delete cascade);
         create index if not exists starter_kit_item_character_idx on tbt.starter_kit_item (character_id);
+
+        create table if not exists tbt.weekly_goal (
+            week date primary key,
+            kind text not null,
+            target integer not null,
+            name text not null,
+            reached_at timestamptz not null default now());
+
+        create table if not exists tbt.weekly_goal_reward (
+            week date not null,
+            account_id uuid not null,
+            character text not null,
+            at timestamptz not null default now(),
+            primary key (week, account_id));
         """;
 
     /// <summary>
