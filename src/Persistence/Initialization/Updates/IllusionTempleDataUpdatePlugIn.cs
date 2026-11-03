@@ -93,6 +93,9 @@ public class IllusionTempleDataUpdatePlugIn : UpdatePlugInBase
     /// </summary>
     private const int DefaultMinimumPlayerCount = 2;
 
+    private const short FirstSpawnNumber = 100;
+    private const short FirstSpawnNumberAfterObsoleteSpawns = 200;
+
     /// <summary>
     /// The map numbers of the six illusion temples, and the arena monster NPC number range (base id and
     /// how many ids to cycle through) which each of them roams with - temple 6 has none.
@@ -339,14 +342,16 @@ public class IllusionTempleDataUpdatePlugIn : UpdatePlugInBase
                 continue;
             }
 
-            this.RemoveObsoleteStatueSpawns(map);
+            var removedObsoleteSpawns = this.RemoveObsoleteStatueSpawns(map);
 
             if (map.MonsterSpawns.Any(spawn => spawn.MonsterDefinition == stoneStatue))
             {
                 continue;
             }
 
-            short spawnNumber = 100;
+            // The removed placeholders have the ids of the new spawns (map number and spawn number from 100 on),
+            // and the context still tracks them until it's saved: the new spawns start behind them.
+            short spawnNumber = removedObsoleteSpawns ? FirstSpawnNumberAfterObsoleteSpawns : FirstSpawnNumber;
             foreach (var (x, y) in StatuePositions)
             {
                 // Only one of the pool positions is spawned at a time, randomly picked by the game logic.
@@ -385,7 +390,8 @@ public class IllusionTempleDataUpdatePlugIn : UpdatePlugInBase
     /// the old ones in place would litter the arena with statues that have no function.
     /// </summary>
     /// <param name="map">The temple map to clean up.</param>
-    private void RemoveObsoleteStatueSpawns(GameMapDefinition map)
+    /// <returns><c>true</c> if spawns have been removed; otherwise, <c>false</c>.</returns>
+    private bool RemoveObsoleteStatueSpawns(GameMapDefinition map)
     {
         var obsoleteSpawns = map.MonsterSpawns
             .Where(spawn => spawn.MonsterDefinition?.Number is >= ObsoleteStatueRangeStart and <= ObsoleteStatueRangeEnd)
@@ -394,6 +400,8 @@ public class IllusionTempleDataUpdatePlugIn : UpdatePlugInBase
         {
             map.MonsterSpawns.Remove(spawn);
         }
+
+        return obsoleteSpawns.Count > 0;
     }
 
     private void AddSpawn(IContext context, GameMapDefinition map, short spawnNumber, MonsterDefinition monsterDefinition, byte x, byte y, SpawnTrigger spawnTrigger)
