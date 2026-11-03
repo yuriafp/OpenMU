@@ -5,6 +5,7 @@
 namespace MUnique.OpenMU.GameLogic;
 
 using System;
+using System.ComponentModel;
 using System.Globalization;
 using System.Threading;
 using MUnique.OpenMU.AttributeSystem;
@@ -37,6 +38,8 @@ using Nito.AsyncEx;
 /// </summary>
 public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacker, ITrader, IPartyMember, IRotatable, IHasBucketInformation, ISupportWalk, IMovable, ILoggerOwner<Player>
 {
+    private const int IceSkillNumber = 7;
+
     private static readonly MagicEffectDefinition GMEffect = new GameMasterMagicEffectDefinition
     {
         InformObservers = true,
@@ -83,6 +86,8 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
     private readonly Lazy<MuHelper.MuHelper> _muHelperLazy;
 
     private readonly MapPowerUps _mapPowerUps = new();
+
+    private readonly AccountAttributeGrantPowerUps _accountAttributeGrantPowerUps = new();
 
     private CancellationTokenSource? _respawnAfterDeathCts;
 
@@ -138,7 +143,12 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
 
         this.MagicEffectList = new MagicEffectsList(this);
         this._appearanceData = new PlayerAppearanceData(this);
-        this.PlayerState.StateChanged += async args => await (this.GameContext.PlugInManager.GetPlugInPoint<IPlayerStateChangedPlugIn>()?.PlayerStateChangedAsync(this, args.PreviousState, args.CurrentStateState) ?? ValueTask.CompletedTask).ConfigureAwait(false);
+        this.PlayerState.StateChanged += async args =>
+        {
+            // The game context counts its players first, so that the plugins already see the new numbers.
+            this.GameContext.OnPlayerStateChanged(this, args.PreviousState, args.CurrentStateState);
+            await (this.GameContext.PlugInManager.GetPlugInPoint<IPlayerStateChangedPlugIn>()?.PlayerStateChangedAsync(this, args.PreviousState, args.CurrentStateState) ?? ValueTask.CompletedTask).ConfigureAwait(false);
+        };
         this.PlayerState.StateChanges += async args => await (this.GameContext.PlugInManager.GetPlugInPoint<IPlayerStateChangingPlugIn>()?.PlayerStateChangingAsync(this, args) ?? ValueTask.CompletedTask).ConfigureAwait(false);
         this._observerToWorldViewAdapter = new ObserverToWorldViewAdapter(this, this.InfoRange);
         this._muHelperLazy = new Lazy<MuHelper.MuHelper>(() => new MuHelper.MuHelper(this));
@@ -783,7 +793,8 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
             throw new InvalidOperationException("AttributeSystem not set.");
         }
 
-        if (this.IsAttackBlockedBySafezone(attacker))
+        if (this.IsAttackBlockedBySafezone(attacker)
+            || this.IsAttackPreventedByPlugIns(attacker))
         {
             return null;
         }
@@ -792,6 +803,12 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
             this.CurrentMiniGame?.AllowPlayerKilling is false)
         {
             return null;
+        }
+
+        if (Rand.NextRandomBool(attacker.Attributes[Stats.CrystalSwordIceChance])
+            && this.GameContext.Configuration.Skills.FirstOrDefault(s => s.Number == IceSkillNumber) is { } ice)
+        {
+            skill = new SkillEntry { Skill = ice };
         }
 
         var hitInfo = await attacker.CalculateDamageAsync(this, skill, isCombo, damageFactor).ConfigureAwait(false);
@@ -1939,6 +1956,7 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
     private void ReleaseAttributeSystem()
     {
         this._mapPowerUps.Remove();
+        this._accountAttributeGrantPowerUps.Remove();
         if (this.Attributes is { } attributes)
         {
             // The ammunition amount of some classes is a stat attribute, which belongs to the character.
@@ -2067,6 +2085,7 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
         // The previous character of this connection may still hold its attribute system.
         this.ReleaseAttributeSystem();
         this.Attributes = new ItemAwareAttributeSystem(this.Account!, selectedCharacter, this.GameContext.Configuration);
+        this._accountAttributeGrantPowerUps.Apply(this.Account!, this.Attributes);
         this.Attributes[Stats.NearbyPartyMemberCount] = 0;
         this.Attributes[Stats.IsResting] = 0;
         this.LogInvalidInventoryItems();
@@ -2137,6 +2156,25 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
         {
             this.Logger.LogError(ex, nameof(this.OnTransformationSkinChanged));
         }
+    }
+
+    /// <summary>
+    /// Determines whether a plugin prevents the attacking player, or the owner of the attacking pet, from damaging this player.
+    /// </summary>
+    /// <param name="attacker">The attacker.</param>
+    /// <returns><c>true</c>, if the attack is prevented; otherwise, <c>false</c>.</returns>
+    private bool IsAttackPreventedByPlugIns(IAttacker attacker)
+    {
+        if ((attacker as Player ?? (attacker as IPlayerSurrogate)?.Owner) is not { } attackerPlayer
+            || attackerPlayer == this
+            || this.GameContext.PlugInManager.GetPlugInPoint<IPlayerAttackRestrictionPlugIn>() is not { } plugInPoint)
+        {
+            return false;
+        }
+
+        var eventArgs = new CancelEventArgs();
+        plugInPoint.CheckAttack(attackerPlayer, this, eventArgs);
+        return eventArgs.Cancel;
     }
 
     /// <summary>

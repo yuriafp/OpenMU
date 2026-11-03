@@ -27,3 +27,42 @@ position (`B6`), NPC position (`BB`), and guild command (`B2:1D`) packets. Withi
 each update, the player packet replaces the position layer and the NPC packet
 adds structures afterward. The commander position is already known locally;
 the existing position packet has no separate commander-identity field.
+
+## Player kills during the battle
+
+During the battle, players of different siege sides may attack and kill each
+other without becoming outlaws, and the attacks don't start the self-defense.
+The attacking sides are enemies of each other as well as of the defenders.
+This applies only on the Castle Siege map and only to players with a siege
+side. Killing a player of the own side, or any player outside the battle, is
+still a normal player kill.
+
+## Gate and statue list
+
+The list of castle gates and Guardian Statues, with their health, upgrade
+levels and positions, is only answered while the Senior's window is open, and
+only shows the structures to the guild master and assistant master of the
+castle owner guild. Other players get an empty list.
+
+## Friendly fire during the battle
+
+During the battle, players of the same siege side can't damage each other,
+including with area skills and pets. This applies only on the Castle Siege map
+and only to players with a siege side.
+
+## Restarting after a missed cycle end
+
+When the server wasn't running at the end of a cycle (`EndCycle`), it notices
+on the next start: if the selected guilds of a battle are still stored while
+the schedule is already before the guild selection (`Notify`) of the next
+cycle, the old registrations, marks and selected guilds are cleared, as the
+cycle end would have done. A cycle which ended without selecting guilds leaves
+no trace, so its registrations stay.
+
+## Teleporting over gates
+
+While a castle gate is closed, players can't use the Teleport or Teleport Ally
+skill to cross it. The gate blocks a teleport when the straight line between
+the start and the target passes through its area. An opened or destroyed gate
+doesn't block teleports. The castle walls are ordinary terrain and are not
+covered by this rule.

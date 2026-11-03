@@ -1047,20 +1047,20 @@ public class CastleSiegeNpcTests
         try
         {
             fixture.Context.CurrentState = CastleSiegeState.Start;
-            fixture.Context.FinalGuildList[alliedGuildId] = new CastleSiegeGuildParticipant
+            fixture.Context.AddSelectedGuild(new CastleSiegeGuildParticipant
             {
                 GuildId = alliedGuildId,
                 PersistentGuildId = Guid.NewGuid(),
                 GuildName = "Ally",
                 Side = CastleSiegeJoinSide.Attack1,
-            };
-            fixture.Context.FinalGuildList[opposingGuildId] = new CastleSiegeGuildParticipant
+            });
+            fixture.Context.AddSelectedGuild(new CastleSiegeGuildParticipant
             {
                 GuildId = opposingGuildId,
                 PersistentGuildId = Guid.NewGuid(),
                 GuildName = "Opponent",
                 Side = CastleSiegeJoinSide.Attack2,
-            };
+            });
             Assert.That(
                 await CastleSiegeSummonLifeStoneAction.SummonAsync(fixture.Player, fixture.Context).ConfigureAwait(false),
                 Is.True);
@@ -1222,13 +1222,13 @@ public class CastleSiegeNpcTests
             await AddSiegePlayerAsync(fixture, CastleSiegeJoinSide.Attack1, 65, 65).ConfigureAwait(false);
             await plugIn.ExecuteTaskAsync(fixture.GameServerContext).ConfigureAwait(false);
             context = plugIn.GetContext(fixture.GameServerContext)!;
-            context.FinalGuildList[OwnerRuntimeGuildId] = new CastleSiegeGuildParticipant
+            context.AddSelectedGuild(new CastleSiegeGuildParticipant
             {
                 GuildId = OwnerRuntimeGuildId,
                 PersistentGuildId = fixture.OwnerPersistentGuildId,
                 GuildName = "Owner",
                 Side = CastleSiegeJoinSide.Attack1,
-            };
+            });
             context.PlayerJoinSides[fixture.Player.SelectedCharacter!.Id] = CastleSiegeJoinSide.Attack1;
             Assert.That(fixture.Player.Position, Is.EqualTo(new Point(65, 65)));
 
@@ -1277,13 +1277,13 @@ public class CastleSiegeNpcTests
             await AddSiegePlayerAsync(fixture, CastleSiegeJoinSide.Attack1, 65, 65).ConfigureAwait(false);
             await plugIn.ExecuteTaskAsync(fixture.GameServerContext).ConfigureAwait(false);
             context = plugIn.GetContext(fixture.GameServerContext)!;
-            context.FinalGuildList[OwnerRuntimeGuildId] = new CastleSiegeGuildParticipant
+            context.AddSelectedGuild(new CastleSiegeGuildParticipant
             {
                 GuildId = OwnerRuntimeGuildId,
                 PersistentGuildId = fixture.OwnerPersistentGuildId,
                 GuildName = "Owner",
                 Side = CastleSiegeJoinSide.Attack1,
-            };
+            });
             context.PlayerJoinSides[fixture.Player.SelectedCharacter!.Id] = CastleSiegeJoinSide.Attack1;
             Assert.That(
                 await CastleSiegeSummonLifeStoneAction.SummonAsync(fixture.Player, context).ConfigureAwait(false),
@@ -1330,8 +1330,8 @@ public class CastleSiegeNpcTests
 
             Assert.Multiple(() =>
             {
-                Assert.That(fixture.Context.MiddleOwnerGuildId, Is.EqualTo(OwnerRuntimeGuildId));
-                Assert.That(fixture.Context.FinalGuildList[OwnerRuntimeGuildId].Side, Is.EqualTo(CastleSiegeJoinSide.Defense));
+                Assert.That(fixture.Context.MiddleOwnerGuildId, Is.EqualTo(fixture.OwnerPersistentGuildId));
+                Assert.That(fixture.Context.GetSelectedGuild(OwnerRuntimeGuildId).Side, Is.EqualTo(CastleSiegeJoinSide.Defense));
                 Assert.That(fixture.Context.LifeStones, Is.Empty);
                 Assert.That(fixture.Map.GetObject(lifeStone.Id), Is.Null);
             });
@@ -1656,6 +1656,68 @@ public class CastleSiegeNpcTests
             await fixture.GameServerContext.RemovePlayerAsync(fixture.Player).ConfigureAwait(false);
             await fixture.Context.NpcController.DespawnAllAsync().ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Verifies that the gate list is only shown to the officers of the castle owner guild.
+    /// </summary>
+    [Test]
+    public async ValueTask NpcListIsOnlyShownToOwnerOfficersAsync()
+    {
+        var fixture = await CreateFixtureAsync().ConfigureAwait(false);
+        try
+        {
+            await fixture.Context.NpcController.PrepareAsync().ConfigureAwait(false);
+
+            fixture.Player.GuildStatus = new GuildMemberStatus(OwnerRuntimeGuildId, GuildPosition.GuildMaster);
+            var asMaster = await CastleSiegeNpcListAction
+                .ShowDefenseStructuresAsync(fixture.Player, fixture.Context, CastleSiegeGate.MonsterNumber)
+                .ConfigureAwait(false);
+
+            fixture.Player.GuildStatus = new GuildMemberStatus(OwnerRuntimeGuildId, GuildPosition.NormalMember);
+            var asOwnerMember = await CastleSiegeNpcListAction
+                .ShowDefenseStructuresAsync(fixture.Player, fixture.Context, CastleSiegeGate.MonsterNumber)
+                .ConfigureAwait(false);
+
+            fixture.Player.GuildStatus = new GuildMemberStatus(999, GuildPosition.GuildMaster);
+            var asOtherMaster = await CastleSiegeNpcListAction
+                .ShowDefenseStructuresAsync(fixture.Player, fixture.Context, CastleSiegeGate.MonsterNumber)
+                .ConfigureAwait(false);
+
+            fixture.Player.GuildStatus = null;
+            var withoutGuild = await CastleSiegeNpcListAction
+                .ShowDefenseStructuresAsync(fixture.Player, fixture.Context, CastleSiegeGate.MonsterNumber)
+                .ConfigureAwait(false);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(asMaster, Is.Not.Empty);
+                Assert.That(asOwnerMember, Is.Empty);
+                Assert.That(asOtherMaster, Is.Empty);
+                Assert.That(withoutGuild, Is.Empty);
+            });
+            Mock.Get(fixture.Player.ViewPlugIns.GetPlugIn<ICastleSiegeNpcListPlugIn>()!)
+                .Verify(view => view.ShowNpcListAsync(It.IsAny<IReadOnlyList<CastleSiegeNpcInfo>>()), Times.Exactly(4));
+        }
+        finally
+        {
+            await fixture.Context.NpcController.DespawnAllAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the gate list request is only answered while the Senior's window is open.
+    /// </summary>
+    [Test]
+    public async ValueTask NpcListRequestNeedsTheSeniorWindowAsync()
+    {
+        var fixture = await CreateFixtureAsync().ConfigureAwait(false);
+        fixture.Player.GuildStatus = new GuildMemberStatus(OwnerRuntimeGuildId, GuildPosition.GuildMaster);
+
+        await new CastleSiegeGateListHandlerPlugIn().HandlePacketAsync(fixture.Player, new byte[4]).ConfigureAwait(false);
+
+        Mock.Get(fixture.Player.ViewPlugIns.GetPlugIn<ICastleSiegeNpcListPlugIn>()!)
+            .Verify(view => view.ShowNpcListAsync(It.IsAny<IReadOnlyList<CastleSiegeNpcInfo>>()), Times.Never);
     }
 
     /// <summary>
@@ -2041,13 +2103,13 @@ public class CastleSiegeNpcTests
 
     private static void SetPlayerJoinSide(TestFixture fixture, CastleSiegeJoinSide side)
     {
-        fixture.Context.FinalGuildList[OwnerRuntimeGuildId] = new CastleSiegeGuildParticipant
+        fixture.Context.AddSelectedGuild(new CastleSiegeGuildParticipant
         {
             GuildId = OwnerRuntimeGuildId,
             PersistentGuildId = fixture.OwnerPersistentGuildId,
             GuildName = "Owner",
             Side = side,
-        };
+        });
         fixture.Context.PlayerJoinSides[fixture.Player.SelectedCharacter!.Id] = side;
     }
 

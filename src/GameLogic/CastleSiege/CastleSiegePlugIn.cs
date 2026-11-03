@@ -4,21 +4,28 @@
 
 namespace MUnique.OpenMU.GameLogic.CastleSiege;
 
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using MUnique.OpenMU.DataModel.Configuration;
 using MUnique.OpenMU.GameLogic.CastleSiege.NPC;
 using MUnique.OpenMU.GameLogic.PlugIns;
+using MUnique.OpenMU.Pathfinding;
 using MUnique.OpenMU.PlugIns;
 
 /// <summary>
 /// Drives the weekly Castle Siege state cycle.
 /// </summary>
+/// <remarks>
+/// During the battle, the attacks and kills between players of opposing sides are exempted from the player killer penalty.
+/// During the battle, players of the same side can't damage each other.
+/// Players can't teleport over a closed gate with a skill.
+/// </remarks>
 [PlugIn]
 [Display(Name = nameof(PlugInResources.CastleSiegePlugIn_Name), Description = nameof(PlugInResources.CastleSiegePlugIn_Description), ResourceType = typeof(PlugInResources))]
 [Guid("B7F62FA9-59E6-49E9-B499-0358A14957CF")]
-public class CastleSiegePlugIn : IPeriodicTaskPlugIn, IObjectAddedToMapPlugIn, IObjectRemovedFromMapPlugIn, IPlayerStateChangedPlugIn, IPlayerSpawnGateSelectionPlugIn
+public class CastleSiegePlugIn : IPeriodicTaskPlugIn, IObjectAddedToMapPlugIn, IObjectRemovedFromMapPlugIn, IPlayerStateChangedPlugIn, IPlayerSpawnGateSelectionPlugIn, IPlayerKillPenaltyExemptionPlugIn, IPlayerTeleportRestrictionPlugIn, IPlayerAttackRestrictionPlugIn
 {
     private static readonly TimeSpan EconomySaveInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan NpcSaveInterval = TimeSpan.FromMinutes(2);
@@ -135,6 +142,37 @@ public class CastleSiegePlugIn : IPeriodicTaskPlugIn, IObjectAddedToMapPlugIn, I
         return ValueTask.CompletedTask;
     }
 
+    /// <inheritdoc />
+    public void CheckAttack(Player attacker, Player defender, CancelEventArgs eventArgs)
+    {
+        if (this.GetContext(attacker.GameContext) is { } context
+            && context.AreOnSameSide(attacker, defender))
+        {
+            eventArgs.Cancel = true;
+        }
+    }
+
+    /// <inheritdoc />
+    public void CheckExemption(Player attacker, Player defender, PlayerKillPenaltyExemptionArgs eventArgs)
+    {
+        if (this.GetContext(attacker.GameContext) is { } context
+            && context.AreOnOpposingSides(attacker, defender))
+        {
+            eventArgs.IsExempted = true;
+        }
+    }
+
+    /// <inheritdoc />
+    public void CheckTeleport(Player player, Point target, CancelEventArgs eventArgs)
+    {
+        if (this.GetContext(player.GameContext) is { } context
+            && player.CurrentMap?.Definition.Number == context.Configuration.CastleSiegeMapDefinition?.Number
+            && context.NpcController.IsLineBlockedByClosedGate(player.Position, target))
+        {
+            eventArgs.Cancel = true;
+        }
+    }
+
     /// <summary>
     /// Forces all Castle Siege contexts to enter a state on their next timer tick.
     /// </summary>
@@ -207,6 +245,7 @@ public class CastleSiegePlugIn : IPeriodicTaskPlugIn, IObjectAddedToMapPlugIn, I
             if (!context.IsInitialized)
             {
                 await context.InitializeAsync(utcNow).ConfigureAwait(false);
+                await CleanUpMissedCycleEndAsync(context, logger).ConfigureAwait(false);
                 context.NextEconomySaveUtc = utcNow + EconomySaveInterval;
                 this.ConfigureNotifications(context, utcNow);
                 await this.OnEnterStateAsync(context, true).ConfigureAwait(false);
@@ -253,6 +292,32 @@ public class CastleSiegePlugIn : IPeriodicTaskPlugIn, IObjectAddedToMapPlugIn, I
     /// <param name="context">The Castle Siege context.</param>
     /// <remarks>The packet-backed implementation is added with the Castle Siege network view phase.</remarks>
     protected virtual ValueTask BroadcastStateUpdateAsync(CastleSiegeContext context) => ValueTask.CompletedTask;
+
+    /// <summary>
+    /// Clears the registrations and the selected guilds of the previous cycle, if the server
+    /// wasn't running when that cycle ended.
+    /// </summary>
+    /// <remarks>
+    /// The selected guilds are only persisted from <see cref="CastleSiegeState.Notify"/> until <see cref="CastleSiegeState.EndCycle"/>,
+    /// so finding them in an earlier state of a cycle means the clean-up of <see cref="CastleSiegeState.EndCycle"/> never ran.
+    /// A cycle which ended without selecting guilds leaves no such trace, so its registrations can't be told apart from new ones.
+    /// </remarks>
+    private static async ValueTask CleanUpMissedCycleEndAsync(CastleSiegeContext context, ILogger logger)
+    {
+        if (context.CurrentState >= CastleSiegeState.Notify
+            || context.SiegeData.Guilds.Count == 0)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "Castle Siege started in state {state} with {count} selected guilds of the previous cycle; the server wasn't running at its end. Clearing the registrations and selected guilds.",
+            context.CurrentState,
+            context.SiegeData.Guilds.Count);
+        await context.ClearRegistrationsAsync().ConfigureAwait(false);
+        context.FinalGuildList.Clear();
+        await context.SaveFinalGuildListAsync().ConfigureAwait(false);
+    }
 
     private static TimeSpan? GetNotificationInterval(CastleSiegeState state)
     {

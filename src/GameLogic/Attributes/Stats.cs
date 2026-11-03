@@ -269,7 +269,7 @@ public class Stats
     /// <see cref="AggregateType.Multiplicate"/> values include:
     ///     Double wield halving (averaging).
     /// <see cref="AggregateType.AddFinal"/> values include:
-    ///     Excellent lvl/20 option (pendant); wings damage option; harmony damage (min and max) option; gold fenrir damage bonus; <see cref="BaseDamageBonus"/>.
+    ///     Excellent lvl/20 option (pendant); wings damage option; harmony damage (min and max) option; gold fenrir damage bonus; <see cref="BaseDamageBonus"/>; Scroll of Wrath.
     /// </remarks>
     public static AttributeDefinition PhysicalBaseDmg { get; } = new(new Guid("DD1E13E4-BFFD-45B5-9B91-9080710324B2"), "Physical Base Damage (min and max)", string.Empty);
 
@@ -508,6 +508,12 @@ public class Stats
     /// </summary>
     /// <remarks>Excludes bows and staffs. Unlocks <see cref="TwoHandedWeaponDamageIncrease"/>.</remarks>
     public static AttributeDefinition IsTwoHandedWeaponEquipped { get; } = new(new Guid("7426781F-CD87-4F2B-8B03-9447B670C632"), "Is Two-Handed Weapon Equipped", string.Empty);
+
+    /// <summary>
+    /// Gets the crystal sword ice chance.
+    /// </summary>
+    /// <remarks>On every attack, the ice skill may replace that hit by this chance.</remarks>
+    public static AttributeDefinition CrystalSwordIceChance { get; } = new(new Guid("A1B2C3D4-E5F6-47A8-B9C0-D1E2F3A4B5C6"), "Crystal Sword Ice Chance", string.Empty);
 
     /// <summary>
     /// Gets the is a bow equipped.
