@@ -112,6 +112,7 @@ internal static class MilestoneCatalog
         {
             0 => string.Empty,
             1 => $"Blood Castle às {times[0]}.",
+            > 4 => "Blood Castle várias vezes por dia.",
             _ => $"Blood Castle às {string.Join(", ", times.Take(times.Count - 1))} e {times[^1]}.",
         };
     }

@@ -74,6 +74,12 @@ public class HappyHourPlugIn : PeriodicTaskBasePlugIn<HappyHourConfiguration, Pe
         return this._happyHourExtraMultipliers.GetOrAdd(gameContext, _ => new SimpleElement(1.0f, AggregateType.Multiplicate));
     }
 
+    /// <summary>
+    /// Gets a value indicating that the event continues after a restart of the server inside its window,
+    /// as the windows can last a whole weekend.
+    /// </summary>
+    protected override bool ResumesInsideWindow => true;
+
     /// <inheritdoc/>
     protected override PeriodicTaskGameServerState CreateState(IGameContext gameContext)
     {

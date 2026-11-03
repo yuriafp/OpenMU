@@ -40,7 +40,8 @@ internal static class EventSchedule
     public static IReadOnlyList<TimeOnly> GetTimes(IGameContext gameContext, string name)
         => GetTimetables(gameContext)
             .Where(e => e.Name == name)
-            .SelectMany(e => e.Configuration.Timetable)
+            .SelectMany(e => e.Configuration.GetStartsUtc(DateOnly.FromDateTime(DateTime.UtcNow), gameContext.ServerTimeZone))
+            .Select(startsAt => TimeOnly.FromDateTime(startsAt))
             .Distinct()
             .OrderBy(time => time.Add(TbtTime.ShownOffset))
             .ToList();
@@ -84,7 +85,7 @@ internal static class EventSchedule
                 _ => (string.Empty, null),
             };
 
-            if (entry.Configuration is { Timetable.Count: > 0 } configuration)
+            if (entry.Configuration is { HasSchedule: true } configuration)
             {
                 yield return (entry.Name, configuration);
             }

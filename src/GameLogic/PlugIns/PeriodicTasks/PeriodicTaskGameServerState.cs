@@ -35,6 +35,12 @@ public class PeriodicTaskGameServerState
     public DateTime LastRunUtc { get; set; } = DateTime.MinValue;
 
     /// <summary>
+    /// Gets or sets the duration of the current or last run, when its schedule entry has an own one.
+    /// Without a value, the task duration of the configuration applies.
+    /// </summary>
+    public TimeSpan? RunDuration { get; set; }
+
+    /// <summary>
     /// Gets or sets the state.
     /// </summary>
     public PeriodicTaskState State { get; set; } = PeriodicTaskState.NotStarted;

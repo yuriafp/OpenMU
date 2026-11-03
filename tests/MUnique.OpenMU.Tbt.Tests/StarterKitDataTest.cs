@@ -127,7 +127,7 @@ public class StarterKitDataTest
         }
 
         var requirements = items
-            .SelectMany(item => item.Definition!.Requirements.Select(requirement => item.GetRequirement(requirement)))
+            .SelectMany(item => item.GetRequirements(this._configuration))
             .GroupBy(r => r.Attr, r => r.Value)
             .ToDictionary(g => g.Key, g => g.Max());
         var points = requirements

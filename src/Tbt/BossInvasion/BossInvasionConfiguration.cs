@@ -31,9 +31,9 @@ public class BossInvasionConfiguration : PeriodicTaskConfiguration
     private const int EscortCount = 4;
 
     /// <summary>
-    /// Gets or sets the themes, one per week in turn.
+    /// Gets or sets the themes, one per run in turn.
     /// </summary>
-    [Display(Name = "Themes", Description = "The themes, one per week in turn.", Order = 100)]
+    [Display(Name = "Themes", Description = "The themes, one per run in turn.", Order = 100)]
     public IList<BossInvasionTheme> Themes { get; set; } = new List<BossInvasionTheme>();
 
     /// <summary>

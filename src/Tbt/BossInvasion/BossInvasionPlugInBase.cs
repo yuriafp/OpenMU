@@ -14,10 +14,10 @@ using MUnique.OpenMU.PlugIns;
 using MUnique.OpenMU.Tbt.Registro;
 
 /// <summary>
-/// The boss invasion (PLANO-SERVIDOR.md, 5.4, item 13 of 9.5): once a week, the bosses of a theme
+/// The boss invasion (PLANO-SERVIDOR.md, 5.4, item 13 of 9.5): at each time of its schedule, the bosses of a theme
 /// appear with their escort at a random place outside the town of their maps, with many times the
 /// health of their definition, so that it takes a group to kill them. The party which kills a boss
-/// gets its Boxes of Kundun. The themes take turns, one per week.
+/// gets its Boxes of Kundun. The themes take turns, one per run.
 /// </summary>
 /// <remarks>
 /// It's our own periodic task instead of the <c>BaseInvasionPlugIn</c> of OpenMU, which can't give a
@@ -32,8 +32,6 @@ public abstract class BossInvasionPlugInBase : PeriodicTaskBasePlugIn<BossInvasi
     /// The distance around a dead boss in which its prize boxes fall.
     /// </summary>
     private const byte PrizeSpread = 2;
-
-    private const int DaysPerWeek = 7;
 
     private BossInvasionConfiguration? _defaultConfiguration;
 
@@ -70,20 +68,18 @@ public abstract class BossInvasionPlugInBase : PeriodicTaskBasePlugIn<BossInvasi
     }
 
     /// <summary>
-    /// Chooses the theme of the week: the themes take turns, one per week from Monday on in UTC, and a
-    /// theme which can't run gives its turn to the next one.
+    /// Chooses the theme of a run: the themes take turns, one per run, and a theme which can't run
+    /// gives its turn to the next one.
     /// </summary>
     /// <param name="themes">The themes.</param>
-    /// <param name="utcNow">The current time, in UTC.</param>
+    /// <param name="runNumber">The number of the run, see <see cref="PeriodicTaskConfiguration.GetRunNumber"/>.</param>
     /// <param name="canRun">Determines whether a theme can run.</param>
     /// <returns>The theme, or <c>null</c> when none can run.</returns>
-    internal static BossInvasionTheme? ChooseTheme(IList<BossInvasionTheme> themes, DateTime utcNow, Func<BossInvasionTheme, bool> canRun)
+    internal static BossInvasionTheme? ChooseTheme(IList<BossInvasionTheme> themes, long runNumber, Func<BossInvasionTheme, bool> canRun)
     {
-        // The weeks since the 1st of January of the year 1, a Monday.
-        var week = utcNow.Ticks / TimeSpan.TicksPerDay / DaysPerWeek;
         for (var i = 0; i < themes.Count; i++)
         {
-            var theme = themes[(int)((week + i) % themes.Count)];
+            var theme = themes[(int)((runNumber + i) % themes.Count)];
             if (canRun(theme))
             {
                 return theme;
@@ -143,7 +139,8 @@ public abstract class BossInvasionPlugInBase : PeriodicTaskBasePlugIn<BossInvasi
         state.Monsters.Clear();
         state.HasEnded = false;
         var configuration = this.Configuration ??= this.CreateDefaultConfiguration();
-        state.Theme = ChooseTheme(configuration.Themes, DateTime.UtcNow, theme => CanRun(state.Context, theme));
+        var runNumber = configuration.GetRunNumber(DateTime.UtcNow, state.Context.ServerTimeZone);
+        state.Theme = ChooseTheme(configuration.Themes, runNumber, theme => CanRun(state.Context, theme));
         if (state.Theme is null)
         {
             state.Context.LoggerFactory.CreateLogger(this.GetType().Name).LogWarning("No theme of the boss invasion can run: none has a boss which is configured and active, on an active map.");

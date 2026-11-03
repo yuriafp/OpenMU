@@ -330,6 +330,42 @@ public class PeriodicTaskServerScopeTests
     }
 
     /// <summary>
+    /// The Happy Hour continues after a restart of the server inside its window, for the rest of the window,
+    /// and doesn't start when the window is over.
+    /// </summary>
+    [Test]
+    public async Task HappyHourResumesInsideItsWindowAsync()
+    {
+        var inside = this.CreateServerContextMock(serverId: 0);
+        inside.As<IGameServerContext>().SetupGet(c => c.ServerTimeZone).Returns(TimeZoneInfo.Utc);
+        var insidePlugIn = CreateHappyHour(TimeOnly.FromDateTime(DateTime.UtcNow.AddHours(-1)));
+        await insidePlugIn.ExecuteTaskAsync(inside.Object).ConfigureAwait(false);
+        await insidePlugIn.ExecuteTaskAsync(inside.Object).ConfigureAwait(false);
+
+        var outside = this.CreateServerContextMock(serverId: 0);
+        outside.As<IGameServerContext>().SetupGet(c => c.ServerTimeZone).Returns(TimeZoneInfo.Utc);
+        var outsidePlugIn = CreateHappyHour(TimeOnly.FromDateTime(DateTime.UtcNow.AddHours(-4)));
+        await outsidePlugIn.ExecuteTaskAsync(outside.Object).ConfigureAwait(false);
+        await outsidePlugIn.ExecuteTaskAsync(outside.Object).ConfigureAwait(false);
+
+        Assert.That(insidePlugIn.GetMultiplierElement(inside.Object).Value, Is.EqualTo(1.2f));
+        Assert.That(outsidePlugIn.GetMultiplierElement(outside.Object).Value, Is.EqualTo(1.0f));
+
+        static HappyHourPlugIn CreateHappyHour(TimeOnly start)
+        {
+            return new HappyHourPlugIn
+            {
+                Configuration = new HappyHourConfiguration
+                {
+                    PreStartMessageDelay = TimeSpan.Zero,
+                    ExperienceMultiplier = 1.2f,
+                    Schedule = [new PeriodicTaskScheduleEntry { Timetable = [start], Duration = TimeSpan.FromHours(3) }],
+                },
+            };
+        }
+    }
+
+    /// <summary>
     /// A server added back to the list doesn't start a stale forced event: while excluded,
     /// its ticks already observed (and consumed) the force.
     /// </summary>

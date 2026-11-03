@@ -97,7 +97,21 @@ public abstract class PeriodicTaskBasePlugIn<TConfiguration, TState> : IPeriodic
                         return;
                     }
 
-                    if (!this.IsItTimeToStart(gameContext))
+                    TimeSpan? runDuration;
+                    if (this.IsItTimeToStart(gameContext))
+                    {
+                        runDuration = configuration.GetStartingRunDuration(DateTime.UtcNow, gameContext.ServerTimeZone);
+                    }
+                    else if (this.ResumesInsideWindow)
+                    {
+                        // E.g. after a restart of the server in the middle of a long window.
+                        runDuration = configuration.GetRemainingRunTime(DateTime.UtcNow, gameContext.ServerTimeZone);
+                        if (runDuration is null)
+                        {
+                            return;
+                        }
+                    }
+                    else
                     {
                         return;
                     }
@@ -108,6 +122,7 @@ public abstract class PeriodicTaskBasePlugIn<TConfiguration, TState> : IPeriodic
                         return;
                     }
 
+                    state.RunDuration = runDuration;
                     state.ConsumedForceGeneration = forceGeneration;
                     state.NextRunUtc = DateTime.UtcNow.Add(configuration.PreStartMessageDelay);
                     await this.OnPrepareEventAsync(state).ConfigureAwait(false);
@@ -124,7 +139,7 @@ public abstract class PeriodicTaskBasePlugIn<TConfiguration, TState> : IPeriodic
 
             case PeriodicTaskState.Prepared:
                 {
-                    state.NextRunUtc = DateTime.UtcNow.Add(configuration.TaskDuration);
+                    state.NextRunUtc = DateTime.UtcNow.Add(state.RunDuration ?? configuration.TaskDuration);
                     state.State = PeriodicTaskState.Started;
                     state.LastRunUtc = DateTime.UtcNow;
 
@@ -189,13 +204,20 @@ public abstract class PeriodicTaskBasePlugIn<TConfiguration, TState> : IPeriodic
     }
 
     /// <summary>
+    /// Gets a value indicating whether the task starts when the server is inside a window of its schedule
+    /// without having started it, instead of waiting for the next start time. The run lasts the rest of the window.
+    /// It's meant for long windows, which a restart of the server would otherwise cut off.
+    /// </summary>
+    protected virtual bool ResumesInsideWindow => false;
+
+    /// <summary>
     /// Determines whether the previous event run is still within its configured task duration.
     /// Prevents a new event from starting before the previous one has fully elapsed.
     /// </summary>
     /// <param name="state">The current task state.</param>
     /// <returns><c>true</c> if the previous event duration has not elapsed yet; otherwise <c>false</c>.</returns>
     protected virtual bool IsPreviousEventStillRunning(TState state)
-        => state.LastRunUtc != DateTime.MinValue && state.LastRunUtc.Add(this.Configuration?.TaskDuration ?? TimeSpan.Zero) > DateTime.UtcNow;
+        => state.LastRunUtc != DateTime.MinValue && state.LastRunUtc.Add(state.RunDuration ?? this.Configuration?.TaskDuration ?? TimeSpan.Zero) > DateTime.UtcNow;
 
     /// <summary>
     /// Called when the task should be prepared before starting it.

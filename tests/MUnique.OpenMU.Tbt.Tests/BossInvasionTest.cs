@@ -176,22 +176,18 @@ public class BossInvasionTest
     }
 
     /// <summary>
-    /// The themes take turns week by week, from Monday on in UTC: the whole week has the same theme.
+    /// The themes take turns run by run: consecutive runs have consecutive themes.
     /// </summary>
     [Test]
-    public void ThemesTakeTurnsWeekByWeek()
+    public void ThemesTakeTurnsRunByRun()
     {
         var themes = new[] { "A", "B", "C" }.Select(name => new BossInvasionTheme { Name = name }).ToList();
-        var monday = new DateTime(2026, 10, 26, 0, 0, 0, DateTimeKind.Utc);
 
-        string? Chosen(DateTime utcNow) => BossInvasionPlugInBase.ChooseTheme(themes, utcNow, _ => true)?.Name;
+        string? Chosen(long runNumber) => BossInvasionPlugInBase.ChooseTheme(themes, runNumber, _ => true)?.Name;
 
-        var first = Chosen(monday);
-        Assert.That(Chosen(monday.AddDays(6).AddHours(23)), Is.EqualTo(first));
-        var turns = Enumerable.Range(0, 3).Select(week => Chosen(monday.AddDays(7 * week).AddHours(1))).ToList();
-        Assert.That(turns, Is.EquivalentTo(new[] { "A", "B", "C" }));
-        Assert.That(Chosen(monday.AddDays(21)), Is.EqualTo(first));
-        Assert.That(Chosen(monday.AddMinutes(-1)), Is.Not.EqualTo(first));
+        Assert.That(Enumerable.Range(0, 3).Select(run => Chosen(run)), Is.EquivalentTo(new[] { "A", "B", "C" }));
+        Assert.That(Chosen(3), Is.EqualTo(Chosen(0)));
+        Assert.That(Chosen(1), Is.Not.EqualTo(Chosen(0)));
     }
 
     /// <summary>
@@ -201,13 +197,12 @@ public class BossInvasionTest
     public void ThemeWhichCantRunGivesItsTurn()
     {
         var themes = new[] { "A", "B", "C" }.Select(name => new BossInvasionTheme { Name = name }).ToList();
-        var monday = new DateTime(2026, 10, 26, 0, 0, 0, DateTimeKind.Utc);
-        var first = BossInvasionPlugInBase.ChooseTheme(themes, monday, _ => true)!;
+        var first = BossInvasionPlugInBase.ChooseTheme(themes, 7, _ => true)!;
         var next = themes[(themes.IndexOf(first) + 1) % themes.Count];
 
-        Assert.That(BossInvasionPlugInBase.ChooseTheme(themes, monday, theme => theme != first), Is.SameAs(next));
-        Assert.That(BossInvasionPlugInBase.ChooseTheme(themes, monday, _ => false), Is.Null);
-        Assert.That(BossInvasionPlugInBase.ChooseTheme([], monday, _ => true), Is.Null);
+        Assert.That(BossInvasionPlugInBase.ChooseTheme(themes, 7, theme => theme != first), Is.SameAs(next));
+        Assert.That(BossInvasionPlugInBase.ChooseTheme(themes, 7, _ => false), Is.Null);
+        Assert.That(BossInvasionPlugInBase.ChooseTheme([], 7, _ => true), Is.Null);
     }
 
     /// <summary>
