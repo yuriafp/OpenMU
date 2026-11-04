@@ -18,19 +18,19 @@ using MUnique.OpenMU.Tbt.Registro;
 
 /// <summary>
 /// The treasure chest (PLANO-SERVIDOR.md, 5.4, item 12 of 9.5, decision 12): at the times of the
-/// timetable, a chest appears at a random place outside the safe zone of each configured map, for a
-/// few minutes. Who clicks first gets its jewels; a golden chest has more. It's a chest of our own
+/// timetable, chests appear at random places outside the safe zone of each configured map, apart from
+/// each other, for a few minutes. Who clicks first gets its jewels; a golden chest has more. It's a chest of our own
 /// (1001, golden 1002), which our client shows with the treasure chest of Mu Kronus and handles as an
 /// NPC, like the reward boxes of the Doppelganger, so it's opened by talking to it, like in that event
 /// (<see cref="DoppelgangerRewardChestPlugIn"/>).
 /// </summary>
 /// <remarks>
-/// All players see the appearance, with the places, and the opening. The jewels fall at the chest, for
+/// All players see the appearance, with the cities but not the places, and each opening. The jewels fall at the chest, for
 /// the one who opened it. Bots never talk to it. Every opening is written to the registro, which tells
 /// the share of the chests in the jewels of the group (PLANO-SERVIDOR.md, section 8).
 /// </remarks>
 [PlugIn]
-[Display(Name = "TBT: Baú do tesouro", Description = "Puts a treasure chest at a random place of each configured map (Lorencia, Noria and Devias by default) at the times of the timetable; who opens it first gets jewels.")]
+[Display(Name = "TBT: Baú do tesouro", Description = "Puts treasure chests at random places of each configured map (10 in each of Lorencia, Noria and Devias by default) at the times of the timetable; who opens one first gets its jewels.")]
 [Guid("2B7E4C19-6A3D-4F82-9D15-8C0B5E7A3F64")]
 public class TreasureChestPlugIn : PeriodicTaskBasePlugIn<TreasureChestConfiguration, TreasureChestState>, IPlayerTalkToNpcPlugIn, ISupportDefaultCustomConfiguration
 {
@@ -43,6 +43,12 @@ public class TreasureChestPlugIn : PeriodicTaskBasePlugIn<TreasureChestConfigura
     /// The maximum distance of a player to a chest to open it, like in the Doppelganger.
     /// </summary>
     private const int MaximumOpenDistance = 4;
+
+    /// <summary>
+    /// The smallest distance between two chests of a map, so that they spread over it. When the map
+    /// hasn't enough places that far apart, the remaining chests go to any other free place.
+    /// </summary>
+    private const int MinimumChestDistance = 8;
 
     /// <summary>
     /// The time after which an opened chest is removed, so that the client can show its opening.
@@ -121,6 +127,63 @@ public class TreasureChestPlugIn : PeriodicTaskBasePlugIn<TreasureChestConfigura
     internal static string Describe(IEnumerable<string> jewels)
         => string.Join(", ", jewels.GroupBy(name => name).Select(group => $"{group.Count()} {group.Key}"));
 
+    /// <summary>
+    /// Lists the cities of a round for the message, e.g. "Lorencia, Noria e Devias".
+    /// </summary>
+    /// <param name="cities">The cities.</param>
+    /// <returns>The list.</returns>
+    internal static string ListCities(IReadOnlyList<string> cities)
+        => cities.Count < 2 ? string.Concat(cities) : $"{string.Join(", ", cities.Take(cities.Count - 1))} e {cities[^1]}";
+
+    /// <summary>
+    /// Picks the places of the chests of a map: random ones, at least <paramref name="minimumDistance"/>
+    /// apart while the map has such places, then any other free ones.
+    /// </summary>
+    /// <param name="places">The places of the map.</param>
+    /// <param name="count">The number of chests.</param>
+    /// <param name="minimumDistance">The smallest distance between two chests.</param>
+    /// <param name="nextIndex">Gets a random index below the specified number.</param>
+    /// <returns>The distinct places, at most <paramref name="count"/>.</returns>
+    internal static IReadOnlyList<Point> PickPlaces(IReadOnlyList<Point> places, int count, int minimumDistance, Func<int, int> nextIndex)
+    {
+        // A random order, by Fisher-Yates.
+        var shuffled = places.Distinct().ToArray();
+        for (var i = shuffled.Length - 1; i > 0; i--)
+        {
+            var j = nextIndex(i + 1);
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+
+        var picked = new List<Point>();
+        foreach (var place in shuffled)
+        {
+            if (picked.Count >= count)
+            {
+                return picked;
+            }
+
+            if (picked.TrueForAll(other => other.EuclideanDistanceTo(place) >= minimumDistance))
+            {
+                picked.Add(place);
+            }
+        }
+
+        foreach (var place in shuffled)
+        {
+            if (picked.Count >= count)
+            {
+                break;
+            }
+
+            if (!picked.Contains(place))
+            {
+                picked.Add(place);
+            }
+        }
+
+        return picked;
+    }
+
     /// <inheritdoc />
     protected override TreasureChestState CreateState(IGameContext gameContext) => new(gameContext);
 
@@ -135,28 +198,25 @@ public class TreasureChestPlugIn : PeriodicTaskBasePlugIn<TreasureChestConfigura
     {
         var configuration = this.Configuration ??= TreasureChestConfiguration.CreateDefault();
         var logger = state.Context.LoggerFactory.CreateLogger(this.GetType().Name);
-        var places = new List<string>();
+        var cities = new List<string>();
         foreach (var mapNumber in configuration.Maps.Where(number => number >= 0).Distinct())
         {
             try
             {
-                // Not Rand.NextRandomBool(percent), which is true for one more than the percent.
-                var isGolden = Rand.NextInt(0, 100) < configuration.GoldenChance;
-                var chestNumber = isGolden ? configuration.GoldenChestNumber : configuration.ChestNumber;
-                if (await this.SpawnChestAsync(state, (ushort)mapNumber, chestNumber, isGolden, logger).ConfigureAwait(false) is { } chest)
+                if (await this.SpawnChestsAsync(state, (ushort)mapNumber, configuration, logger).ConfigureAwait(false) is { } city)
                 {
-                    places.Add($"{chest.CurrentMap.Definition.Name.ValueInNeutralLanguage} ({chest.Position.X}, {chest.Position.Y})");
+                    cities.Add(city);
                 }
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Couldn't put the treasure chest on the map {Map}.", mapNumber);
+                logger.LogWarning(ex, "Couldn't put the treasure chests on the map {Map}.", mapNumber);
             }
         }
 
-        if (places.Count > 0)
+        if (cities.Count > 0)
         {
-            await GlobalNotification.SendAsync(state.Context, configuration.StartMessage, TreasureChestConfiguration.CreateDefault().StartMessage, logger, (int)configuration.TaskDuration.TotalMinutes, string.Join(", ", places)).ConfigureAwait(false);
+            await GlobalNotification.SendAsync(state.Context, configuration.StartMessage, TreasureChestConfiguration.CreateDefault().StartMessage, logger, (int)configuration.TaskDuration.TotalMinutes, ListCities(cities), configuration.ChestsPerMap).ConfigureAwait(false);
         }
     }
 
@@ -222,23 +282,51 @@ public class TreasureChestPlugIn : PeriodicTaskBasePlugIn<TreasureChestConfigura
         chest.Dispose();
     }
 
-    private async ValueTask<Destructible?> SpawnChestAsync(TreasureChestState state, ushort mapNumber, short chestNumber, bool isGolden, ILogger logger)
+    /// <summary>
+    /// Puts the chests of a round on a map, see <see cref="TreasureChestConfiguration.ChestsPerMap"/>.
+    /// </summary>
+    /// <returns>The name of the map; <c>null</c>, when no chest was put on it.</returns>
+    private async ValueTask<string?> SpawnChestsAsync(TreasureChestState state, ushort mapNumber, TreasureChestConfiguration configuration, ILogger logger)
+    {
+        if (await state.Context.GetMapAsync(mapNumber).ConfigureAwait(false) is not { } map
+            || MapPlaces.GetReachablePlaces(map.Terrain) is not { Length: > 0 } places)
+        {
+            logger.LogWarning("The map {Map} of the treasure chests doesn't exist or has no free place.", mapNumber);
+            return null;
+        }
+
+        var spawned = 0;
+        foreach (var position in PickPlaces(places, configuration.ChestsPerMap, MinimumChestDistance, max => Rand.NextInt(0, max)))
+        {
+            try
+            {
+                // Not Rand.NextRandomBool(percent), which is true for one more than the percent.
+                var isGolden = Rand.NextInt(0, 100) < configuration.GoldenChance;
+                var chestNumber = isGolden ? configuration.GoldenChestNumber : configuration.ChestNumber;
+                if (await this.SpawnChestAsync(state, map, position, chestNumber, isGolden, logger).ConfigureAwait(false) is not null)
+                {
+                    spawned++;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Couldn't put the treasure chest at {Position} of the map {Map}.", position, mapNumber);
+            }
+        }
+
+        return spawned > 0 ? map.Definition.Name.ValueInNeutralLanguage : null;
+    }
+
+    private async ValueTask<Destructible?> SpawnChestAsync(TreasureChestState state, GameMap map, Point position, short chestNumber, bool isGolden, ILogger logger)
     {
         var gameContext = state.Context;
+        var mapNumber = map.MapId;
         if (gameContext.Configuration.Monsters.FirstOrDefault(m => m.Number == chestNumber) is not { } definition)
         {
             logger.LogWarning("The treasure chest {Chest} isn't configured.", chestNumber);
             return null;
         }
 
-        if (await gameContext.GetMapAsync(mapNumber).ConfigureAwait(false) is not { } map
-            || MapPlaces.GetReachablePlaces(map.Terrain) is not { Length: > 0 } places)
-        {
-            logger.LogWarning("The map {Map} of the treasure chest doesn't exist or has no free place.", mapNumber);
-            return null;
-        }
-
-        var position = places[Rand.NextInt(0, places.Length)];
         var area = new MonsterSpawnArea
         {
             GameMap = map.Definition,

@@ -15,14 +15,24 @@ using MUnique.OpenMU.Interfaces;
 public class TreasureChestConfiguration : PeriodicTaskConfiguration
 {
     /// <summary>
-    /// Gets or sets the numbers of the maps with a chest each, e.g. Lorencia (0), Noria (3) and Devias (2).
+    /// Gets or sets the numbers of the maps with chests, e.g. Lorencia (0), Noria (3) and Devias (2).
     /// </summary>
     /// <remarks>
     /// Like <c>CrywolfEventDefinition</c>, a list of <see cref="short"/>: the admin panel has no field for
     /// <see cref="ushort"/>.
     /// </remarks>
-    [Display(Name = "Maps", Description = "The numbers of the maps with a chest each, e.g. Lorencia (0), Noria (3) and Devias (2).", Order = 100)]
+    [Display(Name = "Maps", Description = "The numbers of the maps with chests, e.g. Lorencia (0), Noria (3) and Devias (2).", Order = 100)]
     public IList<short> Maps { get; set; } = new List<short>();
+
+    /// <summary>
+    /// Gets or sets the number of chests of each map in a round, each golden by the <see cref="GoldenChance"/>.
+    /// </summary>
+    /// <remarks>
+    /// With an initial value, so that a configuration saved before this setting existed gets it too.
+    /// </remarks>
+    [Display(Name = "Chests per Map", Description = "The number of chests of each map in a round, each golden by the chance.", Order = 107)]
+    [Range(1, 50)]
+    public int ChestsPerMap { get; set; } = 10;
 
     /// <summary>
     /// Gets or sets the chance, in percent, that a chest is a golden one.
@@ -65,8 +75,9 @@ public class TreasureChestConfiguration : PeriodicTaskConfiguration
     public LocalizedString OpenedMessage { get; set; }
 
     /// <summary>
-    /// Gets the default configuration (PLANO-SERVIDOR.md, 5.4, decision 12): every 3 hours, one chest
-    /// in Lorencia, Noria and Devias for 10 minutes, one in ten golden, with one jewel or, golden, three.
+    /// Gets the default configuration (PLANO-SERVIDOR.md, 5.4, decision 12): every 3 hours, 10 chests
+    /// in each of Lorencia, Noria and Devias for 10 minutes (the user, 2026-11-04; one per city before),
+    /// one in ten golden, with one jewel or, golden, three. The message tells the cities, not the places.
     /// The times keep a quarter of an hour before the events of the agenda: 18:45 and 21:45 in Brasília
     /// are the rounds of the night.
     /// </summary>
@@ -75,9 +86,10 @@ public class TreasureChestConfiguration : PeriodicTaskConfiguration
     {
         Timetable = GenerateTimeSequence(TimeSpan.FromHours(3), new TimeOnly(0, 45)).ToList(),
         TaskDuration = TimeSpan.FromMinutes(10),
-        StartMessage = "Baús do tesouro apareceram por {0} minutos: {1}. Quem abrir primeiro leva!",
+        StartMessage = "{2} baús do tesouro apareceram em cada cidade por {0} minutos: {1}. Cada baú é de quem abrir primeiro!",
         EndMessage = "Os baús do tesouro que ninguém abriu sumiram.",
         Maps = new List<short> { 0, 3, 2 },
+        ChestsPerMap = 10,
         GoldenChance = 10,
         Jewels = 1,
         GoldenJewels = 3,
