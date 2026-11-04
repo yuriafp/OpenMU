@@ -17,6 +17,8 @@ namespace MUnique.OpenMU.Tbt.Auction;
 /// <param name="Earnings">The zen of the sales to take.</param>
 /// <param name="Listings">The items of the page.</param>
 /// <param name="AccountId">The account of the player, which marks its own items.</param>
+/// <param name="Sort">The order of the items.</param>
+/// <param name="Total">How many items the search found, on all pages.</param>
 internal sealed record AuctionPage(
     AuctionView View,
     bool Open,
@@ -27,4 +29,6 @@ internal sealed record AuctionPage(
     int MineCount,
     long Earnings,
     IReadOnlyList<StoredListing> Listings,
-    Guid AccountId);
+    Guid AccountId,
+    AuctionSort Sort = AuctionSort.Newest,
+    int Total = 0);

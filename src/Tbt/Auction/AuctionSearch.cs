@@ -14,7 +14,8 @@ namespace MUnique.OpenMU.Tbt.Auction;
 /// The items by name, as the client found them in its own names (they're translated there):
 /// group * 512 + number. <c>null</c> without a search by name; empty when the name matched nothing.
 /// </param>
-internal sealed record AuctionSearch(AuctionCategory Category, string? Currency, AuctionQuality Quality, int[]? ItemTypes)
+/// <param name="Sort">The order of the items.</param>
+internal sealed record AuctionSearch(AuctionCategory Category, string? Currency, AuctionQuality Quality, int[]? ItemTypes, AuctionSort Sort = AuctionSort.Newest)
 {
     /// <summary>
     /// The number of item numbers in a group, as the client counts the item types.

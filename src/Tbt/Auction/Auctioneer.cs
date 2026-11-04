@@ -260,7 +260,8 @@ internal static class Auctioneer
             Enum.IsDefined(category) ? category : AuctionCategory.All,
             currency,
             request.Quality,
-            request.ItemTypes);
+            request.ItemTypes,
+            request.Sort);
     }
 
     /// <summary>
@@ -808,7 +809,7 @@ internal static class Auctioneer
 
             var mine = (await AuctionStore.GetOfSellerAsync(accountId, AuctionContentsWriter.MaximumEntries).ConfigureAwait(false)).Count;
             var earnings = await AuctionStore.GetEarningsAsync(accountId).ConfigureAwait(false);
-            contents = new AuctionPage(AuctionView.Browse, open, category, currencyCode, page, pages, mine, earnings, listings, accountId);
+            contents = new AuctionPage(AuctionView.Browse, open, category, currencyCode, page, pages, mine, earnings, listings, accountId, search.Sort, total);
         }
         catch (Exception ex)
         {
@@ -833,7 +834,7 @@ internal static class Auctioneer
         {
             var listings = await AuctionStore.GetOfSellerAsync(accountId, AuctionContentsWriter.MaximumEntries).ConfigureAwait(false);
             var earnings = await AuctionStore.GetEarningsAsync(accountId).ConfigureAwait(false);
-            contents = new AuctionPage(AuctionView.Mine, false, AuctionCategory.All, AuctionCurrency.Any, 0, 1, listings.Count, earnings, listings, accountId);
+            contents = new AuctionPage(AuctionView.Mine, false, AuctionCategory.All, AuctionCurrency.Any, 0, 1, listings.Count, earnings, listings, accountId, AuctionSort.Newest, listings.Count);
         }
         catch (Exception ex)
         {

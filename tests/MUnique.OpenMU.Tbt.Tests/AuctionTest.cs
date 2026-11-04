@@ -210,12 +210,12 @@ public class AuctionTest
     }
 
     /// <summary>
-    /// A search goes on after the request: the quality, and the item types of a search by name.
+    /// A search goes on after the request: the quality, the order, and the item types of a search by name.
     /// </summary>
     [Test]
     public void SearchIsRead()
     {
-        var packet = new byte[] { 0xC1, 28, 0xFB, 0x05, 1, 3, 0xFF, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 3, 0, 0, 1, 0, 0x01, 0x18 };
+        var packet = new byte[] { 0xC1, 29, 0xFB, 0x05, 1, 3, 0xFF, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 1, 3, 0, 0, 1, 0, 0x01, 0x18 };
 
         var request = AuctionRequest.Read(packet);
         Assert.That(request, Is.Not.Null);
@@ -229,15 +229,19 @@ public class AuctionTest
             Assert.That(search.Quality, Is.EqualTo(AuctionQuality.Level9));
             Assert.That(search.MinimumLevel, Is.EqualTo(9));
             Assert.That(search.ItemTypes, Is.EqualTo(new[] { 0, 1, (12 * 512) + 1 }));
+            Assert.That(search.Sort, Is.EqualTo(AuctionSort.PriceLow));
         });
 
-        packet[21] = 4;
+        packet[22] = 4;
         Assert.That(AuctionRequest.Read(packet), Is.Null, "fewer item types than it says");
-        packet[21] = AuctionRequest.NoNameSearch;
+        packet[22] = AuctionRequest.NoNameSearch;
         Assert.That(AuctionRequest.Read(packet)!.Value.ItemTypes, Is.Null, "without a search by name");
         packet[20] = 99;
         Assert.That(AuctionRequest.Read(packet)!.Value.Quality, Is.EqualTo(AuctionQuality.Any), "an unknown quality");
+        packet[21] = 99;
+        Assert.That(AuctionRequest.Read(packet)!.Value.Sort, Is.EqualTo(AuctionSort.Newest), "an unknown order");
         Assert.That(AuctionRequest.Read(packet[..20])!.Value.Quality, Is.EqualTo(AuctionQuality.Any), "a request without a search");
+        Assert.That(AuctionRequest.Read(packet[..20])!.Value.Sort, Is.EqualTo(AuctionSort.Newest), "a request without a search");
     }
 
     /// <summary>
@@ -268,7 +272,7 @@ public class AuctionTest
             new(7, account, "Vendedor", "{}", [1, 2, 3], "Kris +0", "zen", 5_000_000, AuctionStore.Active, 3_600),
             new(5, Guid.NewGuid(), "Outro", "{}", Enumerable.Range(1, 16).Select(i => (byte)i).ToArray(), "Bless +0", "Soul", 12, AuctionStore.Delivering, -10),
         };
-        var page = new AuctionPage(AuctionView.Browse, true, AuctionCategory.Jewels, 2, 1, 3, 4, 7_000_000_000, listings, account);
+        var page = new AuctionPage(AuctionView.Browse, true, AuctionCategory.Jewels, 2, 1, 3, 4, 7_000_000_000, listings, account, AuctionSort.EndingSoon, 21);
         var configuration = new AuctionConfiguration { ListingFee = 100_000, CancelFee = 50_000, BuyerFee = 200_000, DurationDays = 7, MaximumListingsPerAccount = 20 };
         var buffer = Enumerable.Repeat((byte)0xFF, 300).ToArray();
 
@@ -280,8 +284,9 @@ public class AuctionTest
         Assert.That(BitConverter.ToUInt16(buffer, 10), Is.EqualTo(1));
         Assert.That(BitConverter.ToUInt16(buffer, 12), Is.EqualTo(3));
         Assert.That((BitConverter.ToInt32(buffer, 14), BitConverter.ToInt32(buffer, 18), BitConverter.ToInt32(buffer, 22)), Is.EqualTo((100_000, 50_000, 200_000)));
-        Assert.That(buffer[26..29], Is.EqualTo(new byte[] { 7, 20, 4 }));
+        Assert.That(buffer[26..30], Is.EqualTo(new byte[] { 7, 20, 4, (byte)AuctionSort.EndingSoon }));
         Assert.That(BitConverter.ToInt64(buffer, 30), Is.EqualTo(7_000_000_000));
+        Assert.That(BitConverter.ToInt32(buffer, 38), Is.EqualTo(21), "the items found on all pages");
 
         var first = buffer.AsSpan(AuctionContentsWriter.EntriesOffset, AuctionContentsWriter.EntryLength).ToArray();
         Assert.That(BitConverter.ToInt64(first, 0), Is.EqualTo(7));

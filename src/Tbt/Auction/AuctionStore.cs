@@ -318,7 +318,7 @@ internal static class AuctionStore
     }
 
     /// <summary>
-    /// Gets a page of the items for sale, the newest first.
+    /// Gets a page of the items for sale, in the order of the search.
     /// </summary>
     /// <param name="search">What the window looks for.</param>
     /// <param name="page">The page, from 0.</param>
@@ -339,7 +339,14 @@ internal static class AuctionStore
             total = (int)(await count.ExecuteScalarAsync().ConfigureAwait(false) ?? 0);
         }
 
-        await using var command = new NpgsqlCommand($"select {ListingColumns} from tbt.auction_listing where {Filter} order by id desc offset $6 limit $7", connection);
+        var order = search.Sort switch
+        {
+            AuctionSort.PriceLow => "currency, price, id desc",
+            AuctionSort.PriceHigh => "currency, price desc, id desc",
+            AuctionSort.EndingSoon => "expires_at, id desc",
+            _ => "id desc",
+        };
+        await using var command = new NpgsqlCommand($"select {ListingColumns} from tbt.auction_listing where {Filter} order by {order} offset $6 limit $7", connection);
         AddFilter(command.Parameters, search);
         command.Parameters.AddWithValue((long)page * pageSize);
         command.Parameters.AddWithValue((long)pageSize);

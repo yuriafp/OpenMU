@@ -16,8 +16,9 @@ using static System.Buffers.Binary.BinaryPrimitives;
 /// C2 FB 04, a page: the page (byte 5: 1 for sale, 2 of the account), flags (byte 6: 1 opens the
 /// window), the filter (bytes 7 and 8: kind and currency), the count of items (byte 9), the page
 /// and the pages (bytes 10 to 13), the fees (bytes 14 to 25: listing, cancel, buyer), the days
-/// (byte 26), the limit (byte 27), the items of the account (byte 28), the zen to take (bytes 30
-/// to 37), then the items, of <see cref="EntryLength"/> bytes: the identifier (0 to 7), the
+/// (byte 26), the limit (byte 27), the items of the account (byte 28), the order (byte 29,
+/// <see cref="AuctionSort"/>), the zen to take (bytes 30 to 37), how many items the search found
+/// on all pages (bytes 38 to 41), then the items, of <see cref="EntryLength"/> bytes: the identifier (0 to 7), the
 /// currency (8), flags (9: <see cref="EntryFlags"/>), the price (12 to 15), the seconds left (16 to
 /// 19, 0 or less when the sale ended), the seller (20 to 29) and the item as the client gets it
 /// in the inventory (its length at 30, the item at 32 to 47). Numbers are little endian.
@@ -33,7 +34,7 @@ internal static class AuctionContentsWriter
     internal const int MaximumEntries = 40;
 
     /// <summary>Where the items start.</summary>
-    internal const int EntriesOffset = 38;
+    internal const int EntriesOffset = 42;
 
     /// <summary>The length of an item of the page.</summary>
     internal const int EntryLength = 48;
@@ -113,7 +114,9 @@ internal static class AuctionContentsWriter
         target[26] = (byte)Math.Clamp(configuration.DurationDays, 0, byte.MaxValue);
         target[27] = (byte)Math.Clamp(configuration.MaximumListingsPerAccount, 0, byte.MaxValue);
         target[28] = (byte)Math.Clamp(page.MineCount, 0, byte.MaxValue);
+        target[29] = (byte)page.Sort;
         WriteInt64LittleEndian(target[30..], page.Earnings);
+        WriteInt32LittleEndian(target[38..], Math.Max(page.Total, 0));
         for (var i = 0; i < count; i++)
         {
             WriteEntry(target.Slice(EntriesOffset + (i * EntryLength), EntryLength), page.Listings[i], page.AccountId);

@@ -56,12 +56,12 @@ public class AuctionConfiguration
     public int MaximumListingsPerAccount { get; set; } = 20;
 
     /// <summary>
-    /// Gets or sets how many items a page of the window shows: the client shows 6 rows at once, and
-    /// a longer page in parts of 6.
+    /// Gets or sets how many items a page of the window shows: the client shows 8 rows at once, and
+    /// a longer page in parts of 8.
     /// </summary>
     [Display(Name = "Items per Page", Description = "How many items a page of the window of Otto shows.")]
     [Range(1, AuctionContentsWriter.MaximumEntries)]
-    public int PageSize { get; set; } = 6;
+    public int PageSize { get; set; } = 8;
 
     /// <summary>
     /// Gets or sets the highest price in jewels.
