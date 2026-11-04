@@ -372,7 +372,29 @@ public class MiniGameStartPlugInTests
         return (contextMock, manager);
     }
 
-    private (Mock<IGameContext> Context, TestMiniGameManager Manager, List<string> Notifications) CreateAnnouncingContext(MiniGameDefinition definition)
+    /// <summary>
+    /// Tests that the start announces the entrance which stays open longest, like the
+    /// countdown after it, even when a level with a shorter entrance comes last.
+    /// </summary>
+    [Test]
+    public async Task StartAnnouncesLongestEntranceAsync()
+    {
+        var longest = this.CreateDefinition(TimeSpan.FromMinutes(2));
+        var shorter = this.CreateDefinition(TimeSpan.FromMinutes(1));
+        var (fakeContext, manager, notifications) = this.CreateAnnouncingContext(longest, shorter);
+        var game = this.CreateGame(fakeContext, manager, longest);
+        manager.GameToCreate = game;
+        var state = new PeriodicTaskGameServerState(fakeContext.Object);
+
+        await this._plugIn.StartForTestAsync(state).ConfigureAwait(false);
+        Assert.That(notifications, Is.EqualTo(new[] { "Open 2" }));
+
+        // The countdown still has two minutes left: it doesn't announce them again.
+        await this._plugIn.AnnounceEntranceAsync(fakeContext.Object).ConfigureAwait(false);
+        Assert.That(notifications, Is.EqualTo(new[] { "Open 2" }));
+    }
+
+    private (Mock<IGameContext> Context, TestMiniGameManager Manager, List<string> Notifications) CreateAnnouncingContext(params MiniGameDefinition[] definitions)
     {
         var (contextMock, manager) = this.CreateFakeContext();
         var notifications = new List<string>();
@@ -383,7 +405,7 @@ public class MiniGameStartPlugInTests
             .Callback<LocalizedString, object?[]>((message, arguments) => notifications.Add(string.Format(CultureInfo.InvariantCulture, message.ValueInNeutralLanguage, arguments)))
             .Returns(ValueTask.CompletedTask);
         var configurationMock = new Mock<GameConfiguration>();
-        configurationMock.SetupGet(c => c.MiniGameDefinitions).Returns(new List<MiniGameDefinition> { definition });
+        configurationMock.SetupGet(c => c.MiniGameDefinitions).Returns(definitions.ToList());
         contextMock.SetupGet(c => c.Configuration).Returns(configurationMock.Object);
         this._configuration.EntranceOpenedMessage = "Open {0}";
         this._configuration.EntranceClosedMessage = "Closed";

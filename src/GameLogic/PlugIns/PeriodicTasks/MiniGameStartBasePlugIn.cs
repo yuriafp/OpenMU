@@ -193,7 +193,13 @@ public abstract class MiniGameStartBasePlugIn<TConfiguration, TGameState> : Peri
             await state.Context.MiniGames.GetOrCreateAsync(miniGameDefinition, null!).ConfigureAwait(false);
             gamesCreated++;
 
-            enterDuration = miniGameDefinition.EnterDuration;
+            // The countdown follows the entrance which stays open longest (AnnounceEntranceAsync),
+            // so the first announcement does too; a level with a shorter entrance would
+            // announce its minutes first and the countdown jump back up on the next tick.
+            if (miniGameDefinition.EnterDuration > enterDuration)
+            {
+                enterDuration = miniGameDefinition.EnterDuration;
+            }
         }
 
         if (gamesCreated == 0)
