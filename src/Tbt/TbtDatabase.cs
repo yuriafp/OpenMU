@@ -123,6 +123,54 @@ internal static class TbtDatabase
             item_ids uuid[] not null,
             at timestamptz not null default now());
         create index if not exists jewel_bank_operation_account_idx on tbt.jewel_bank_operation (account_id);
+
+        create table if not exists tbt.auction_listing (
+            id bigint generated always as identity primary key,
+            seller_account_id uuid not null,
+            seller_character text not null,
+            item jsonb not null,
+            item_bytes bytea not null,
+            item_name text not null,
+            category smallint not null,
+            currency text not null,
+            price bigint not null check (price > 0),
+            state text not null,
+            listed_at timestamptz not null default now(),
+            expires_at timestamptz not null,
+            op_kind text,
+            op_session uuid,
+            op_account_id uuid,
+            op_character text,
+            op_item_id uuid,
+            op_at timestamptz,
+            outcome text,
+            buyer_account_id uuid,
+            buyer_character text,
+            closed_at timestamptz);
+        -- What the search of the window looks for (added after the first version of the table).
+        alter table tbt.auction_listing add column if not exists item_type integer not null default 0;
+        alter table tbt.auction_listing add column if not exists excellent boolean not null default false;
+        alter table tbt.auction_listing add column if not exists ancient boolean not null default false;
+        alter table tbt.auction_listing add column if not exists sockets smallint not null default 0;
+        alter table tbt.auction_listing add column if not exists item_level smallint not null default 0;
+        create index if not exists auction_listing_active_idx on tbt.auction_listing (id desc) where state = 'active';
+        create index if not exists auction_listing_seller_idx on tbt.auction_listing (seller_account_id) where state <> 'done';
+        create index if not exists auction_listing_op_idx on tbt.auction_listing (op_account_id) where state in ('listing', 'delivering');
+
+        create table if not exists tbt.auction_earnings (
+            account_id uuid primary key,
+            zen bigint not null check (zen >= 0),
+            updated_at timestamptz not null default now());
+
+        create table if not exists tbt.auction_claim (
+            id uuid primary key,
+            account_id uuid not null,
+            session uuid not null,
+            zen bigint not null,
+            inventory_id uuid not null,
+            money_after bigint not null,
+            at timestamptz not null default now());
+        create index if not exists auction_claim_account_idx on tbt.auction_claim (account_id);
         """;
 
     /// <summary>
