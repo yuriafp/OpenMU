@@ -114,7 +114,7 @@ public class SessionCountersTest
         var json = JsonSerializer.Serialize(counters.ToData(account, character));
 
         const string expected = """
-            {"kills":3,"exp":350,"exp_in":1000,"exp_out":1600,"zen_drops":70,"zen_in":1500,"zen_out":3000,"jewel_drops":{"bless":1,"soul":0,"chaos":0,"life":0,"creation":0},"jewels_in":{"bless":1,"soul":1,"chaos":0,"life":0,"creation":0},"jewels_out":{"bless":1,"soul":1,"chaos":0,"life":0,"creation":1}}
+            {"kills":3,"exp":350,"exp_in":1000,"exp_out":1600,"zen_drops":70,"zen_in":1500,"zen_out":3000,"jewel_drops":{"bless":1,"soul":0,"chaos":0,"life":0,"creation":0},"jewels_in":{"bless":1,"soul":1,"chaos":0,"life":0,"creation":0},"jewels_out":{"bless":1,"soul":1,"chaos":0,"life":0,"creation":1},"jewels_banked":{"bless":0,"soul":0,"chaos":0,"life":0,"creation":0}}
             """;
         Assert.That(json, Is.EqualTo(expected));
     }

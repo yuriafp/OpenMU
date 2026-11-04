@@ -39,6 +39,14 @@ internal readonly record struct JewelCount(int Bless, int Soul, int Chaos, int L
         => new(left.Bless + right.Bless, left.Soul + right.Soul, left.Chaos + right.Chaos, left.Life + right.Life, left.Creation + right.Creation);
 
     /// <summary>
+    /// Negates a count, e.g. for jewels which left the Banqueira.
+    /// </summary>
+    /// <param name="count">The count.</param>
+    /// <returns>The negated count.</returns>
+    public static JewelCount operator -(JewelCount count)
+        => new(-count.Bless, -count.Soul, -count.Chaos, -count.Life, -count.Creation);
+
+    /// <summary>
     /// Counts the jewels of an item.
     /// </summary>
     /// <param name="item">The item.</param>

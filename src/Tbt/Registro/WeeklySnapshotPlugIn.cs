@@ -14,8 +14,8 @@ using Npgsql;
 
 /// <summary>
 /// The weekly snapshot of the registro (PLANO-SERVIDOR.md, section 8): level, resets, the stored
-/// jewels and the items +10 and above of every human character, and the vault of every human
-/// account, in <c>tbt.weekly_snapshot</c>. The Chaos Machine has no plugin point, so what happens
+/// jewels and the items +10 and above of every human character, the vault of every human account
+/// and its jewels at the Banqueira (a row named <c>(banco)</c>), in <c>tbt.weekly_snapshot</c>. The Chaos Machine has no plugin point, so what happens
 /// there shows in the difference between two snapshots.
 /// </summary>
 /// <remarks>
@@ -60,7 +60,17 @@ public class WeeklySnapshotPlugIn : IPeriodicTaskPlugIn
             union all
             select a."Id", a."LoginName", null, null, null, null, a."VaultId"
             from data."Account" a
-            where not a."IsBot" and not a."IsTemplate" and a."VaultId" is not null)
+            where not a."IsBot" and not a."IsTemplate" and a."VaultId" is not null),
+        bank as (
+            select b.account_id, a."LoginName" as account,
+                sum(b.amount) filter (where b.jewel = 'Bless') as bless,
+                sum(b.amount) filter (where b.jewel = 'Soul') as soul,
+                sum(b.amount) filter (where b.jewel = 'Chaos') as chaos,
+                sum(b.amount) filter (where b.jewel = 'Life') as life,
+                sum(b.amount) filter (where b.jewel = 'Creation') as creation
+            from tbt.jewel_bank b join data."Account" a on a."Id" = b.account_id
+            where not a."IsBot" and not a."IsTemplate" and b.amount > 0
+            group by b.account_id, a."LoginName")
         insert into tbt.weekly_snapshot (week, account_id, account, character_id, character, level, resets,
             bless, soul, chaos, life, creation, plus10, plus11, plus12, plus13, plus14_15)
         select $1, r.account_id, r.account, r.character_id, r.character, r.level, r.resets,
@@ -68,6 +78,13 @@ public class WeeklySnapshotPlugIn : IPeriodicTaskPlugIn
             coalesce(n.plus10, 0), coalesce(n.plus11, 0), coalesce(n.plus12, 0), coalesce(n.plus13, 0), coalesce(n.plus14_15, 0)
         from rows r
         left join counts n on n.storage_id = r.storage_id
+        where not exists (select 1 from tbt.weekly_snapshot w where w.week = $1)
+        union all
+        -- The jewels kept with the Banqueira, a row of the account like the vault's, named '(banco)'.
+        select $1, b.account_id, b.account, null, '(banco)', null, null,
+            coalesce(b.bless, 0)::integer, coalesce(b.soul, 0)::integer, coalesce(b.chaos, 0)::integer,
+            coalesce(b.life, 0)::integer, coalesce(b.creation, 0)::integer, 0, 0, 0, 0, 0
+        from bank b
         where not exists (select 1 from tbt.weekly_snapshot w where w.week = $1)
         """;
 

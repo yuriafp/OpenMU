@@ -45,6 +45,8 @@ internal sealed class SessionCounters
 
     private JewelCount _droppedJewels;
 
+    private JewelCount _bankedJewels;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SessionCounters"/> class, at the entry into the world.
     /// </summary>
@@ -147,6 +149,19 @@ internal sealed class SessionCounters
     }
 
     /// <summary>
+    /// Counts jewels which the player kept with the Banqueira, or took out (negative). They leave or
+    /// enter the inventory without a drop or a use, so the exit counts them apart.
+    /// </summary>
+    /// <param name="jewels">The jewels.</param>
+    public void AddBankedJewels(JewelCount jewels)
+    {
+        lock (this._jewelLock)
+        {
+            this._bankedJewels += jewels;
+        }
+    }
+
+    /// <summary>
     /// Gets the data of the stay, at the exit from the world.
     /// </summary>
     /// <param name="account">The account.</param>
@@ -155,9 +170,11 @@ internal sealed class SessionCounters
     internal object ToData(Account account, Character character)
     {
         JewelCount droppedJewels;
+        JewelCount bankedJewels;
         lock (this._jewelLock)
         {
             droppedJewels = this._droppedJewels;
+            bankedJewels = this._bankedJewels;
         }
 
         return new
@@ -172,6 +189,9 @@ internal sealed class SessionCounters
             jewel_drops = droppedJewels.ToData(),
             jewels_in = this._jewelsAtEntry.ToData(),
             jewels_out = GetJewels(account, character).ToData(),
+
+            // Kept with the Banqueira minus taken out: the jewels of the stay are jewels_out + jewels_banked.
+            jewels_banked = bankedJewels.ToData(),
         };
     }
 

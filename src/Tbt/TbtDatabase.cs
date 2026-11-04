@@ -104,6 +104,25 @@ internal static class TbtDatabase
             character text not null,
             at timestamptz not null default now(),
             primary key (week, account_id));
+
+        create table if not exists tbt.jewel_bank (
+            account_id uuid not null,
+            jewel text not null,
+            amount bigint not null check (amount >= 0),
+            updated_at timestamptz not null default now(),
+            primary key (account_id, jewel));
+
+        create table if not exists tbt.jewel_bank_operation (
+            id uuid primary key,
+            account_id uuid not null,
+            session uuid not null,
+            kind text not null,
+            jewel text not null,
+            amount integer not null,
+            fee bigint not null,
+            item_ids uuid[] not null,
+            at timestamptz not null default now());
+        create index if not exists jewel_bank_operation_account_idx on tbt.jewel_bank_operation (account_id);
         """;
 
     /// <summary>
